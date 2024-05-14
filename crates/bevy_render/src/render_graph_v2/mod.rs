@@ -1,3 +1,4 @@
+pub mod node;
 pub mod resource;
 pub(crate) mod setup;
 

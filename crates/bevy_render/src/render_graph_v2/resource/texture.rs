@@ -103,8 +103,8 @@ impl<'g> IntoRenderResource<'g> for TextureDescriptor<'static> {
 }
 
 pub struct RenderGraphTextureView<'g> {
-    texture: RenderHandle<'g, Texture>,
-    descriptor: TextureViewDescriptor<'static>,
+    pub texture: RenderHandle<'g, Texture>,
+    pub descriptor: TextureViewDescriptor<'static>,
 }
 
 #[derive(Default)]

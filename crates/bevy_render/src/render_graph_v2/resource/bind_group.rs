@@ -189,15 +189,15 @@ impl<'g> RenderGraphBindGroups<'g> {
 }
 
 pub struct RenderGraphBindGroupDescriptor<'g> {
-    label: Label<'g>,
-    layout: RenderHandle<'g, BindGroupLayout>,
+    pub label: Label<'g>,
+    pub layout: RenderHandle<'g, BindGroupLayout>,
     ///Note: This is not ideal, since we would like to create the dependencies automatically from
     ///the binding list. This isn't possible currently because we'd have to dereference a bind
     ///group layout possibly before it's created. Possible solutions: leave as is, or add Layout information to each entry
     ///so we can infer read/write usage for each binding and maybe create the layout automatically
     ///as well. That might be too verbose though.
-    dependencies: RenderDependencies<'g>,
-    bindings: Vec<RenderGraphBindGroupEntry<'g>>,
+    pub dependencies: RenderDependencies<'g>,
+    pub bindings: Vec<RenderGraphBindGroupEntry<'g>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
