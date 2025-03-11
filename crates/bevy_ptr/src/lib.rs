@@ -518,11 +518,11 @@ pub struct ThinSlicePtr<'a, T> {
 }
 
 impl<'a, T> ThinSlicePtr<'a, T> {
-    #[inline]
     /// Indexes the slice without doing bounds checks
     ///
     /// # Safety
     /// `index` must be in-bounds.
+    #[inline]
     pub unsafe fn get(self, index: usize) -> &'a T {
         #[cfg(debug_assertions)]
         debug_assert!(index < self.len);
@@ -530,6 +530,22 @@ impl<'a, T> ThinSlicePtr<'a, T> {
         let ptr = self.ptr.as_ptr();
         // SAFETY: `index` is in-bounds so the resulting pointer is valid to dereference.
         unsafe { &*ptr.add(index) }
+    }
+
+    /// Returns this pointer offset by `offset` elements.
+    ///
+    /// # Safety
+    /// - offset + len < self.len
+    /// - offset * sizeof(T) must not overflow isize
+    #[inline]
+    pub unsafe fn offset(self, offset: usize, len: usize) -> Self {
+        Self {
+            // SAFETY:
+            ptr: unsafe { self.ptr.offset(offset as isize) },
+            #[cfg(debug_assertions)]
+            len,
+            _marker: PhantomData,
+        }
     }
 }
 

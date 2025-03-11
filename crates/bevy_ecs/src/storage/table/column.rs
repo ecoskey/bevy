@@ -1,9 +1,18 @@
+use bevy_ptr::ThinSlicePtr;
+use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
+
 use super::*;
 use crate::{
-    change_detection::MaybeLocation,
+    change_detection::{MaybeLocation, TicksMut},
     storage::{blob_array::BlobArray, thin_array_ptr::ThinArrayPtr},
 };
-use core::panic::Location;
+use core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    panic::Location,
+    ptr::NonNull,
+};
 
 /// Dense ECS component storage.
 ///
@@ -17,8 +26,8 @@ use core::panic::Location;
 /// instead of working directly with [`ThinColumn`].
 pub struct ThinColumn {
     pub(super) data: BlobArray,
-    pub(super) added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    pub(super) added_ticks: Ticks,
+    pub(super) changed_ticks: Ticks,
     pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
 
@@ -32,7 +41,7 @@ impl ThinColumn {
             },
             added_ticks: ThinArrayPtr::with_capacity(capacity),
             changed_ticks: ThinArrayPtr::with_capacity(capacity),
-            changed_by: MaybeLocation::new_with(|| ThinArrayPtr::with_capacity(capacity)),
+            changed_by: todo!(),
         }
     }
 
@@ -320,7 +329,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_added_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.added_ticks.get_unchecked(row.as_usize())
+        self.ticks.get_added_tick_unchecked(row)
     }
 
     /// Returns the changed tick in this column at the given row
@@ -329,7 +338,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_changed_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.changed_ticks.get_unchecked(row.as_usize())
+        self.ticks.get_changed_tick_unchecked(row)
     }
 
     /// Returns the component ticks in this column at the given row
@@ -338,9 +347,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_ticks_unchecked(&self, row: TableRow) -> ComponentTicks {
-        let added = self.get_added_tick_unchecked(row).read();
-        let changed = self.get_changed_tick_unchecked(row).read();
-        ComponentTicks { added, changed }
+        self.ticks.get_ticks_unchecked(row)
     }
 
     /// Returns the calling location that last modified the given row in this column
@@ -352,9 +359,7 @@ impl ThinColumn {
         &self,
         row: TableRow,
     ) -> MaybeLocation<&UnsafeCell<&'static Location<'static>>> {
-        self.changed_by
-            .as_ref()
-            .map(|changed_by| changed_by.get_unchecked(row.as_usize()))
+        self.ticks.get_changed_by_unchecked(row)
     }
 
     /// Get a slice to the data stored in this [`ThinColumn`].
@@ -366,36 +371,127 @@ impl ThinColumn {
     pub unsafe fn get_data_slice<T>(&self, len: usize) -> &[UnsafeCell<T>] {
         self.data.get_sub_slice(len)
     }
+}
 
-    /// Get a slice to the added [`ticks`](Tick) in this [`ThinColumn`].
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_added_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.added_ticks.as_slice(len)
+pub const TICKS_BRANCH_FACTOR: u8 = 16;
+
+// Dense ECS tick storage.
+//
+pub struct Ticks<const B: u8 = TICKS_BRANCH_FACTOR>(ThinArrayPtr<UnsafeCell<Tick>>);
+
+impl<const B: u8> Ticks<B> {}
+
+#[derive(Clone)]
+pub struct TicksBlock<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
+    slice: ThinSlicePtr<'a, UnsafeCell<Tick>>,
+    height: u8,
+}
+
+impl<'a, const B: u8> TicksBlock<'a, B> {
+    // Create a new `TicksBlock` from a thin slice
+    //
+    // # Safety:
+    // - `ptr` must contain a valid packed B-ary tree in van Emde Boas layout.
+    // - `height` must be equal to the height of the tree in `ptr`
+    unsafe fn new(ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>, height: u8) -> Self {
+        Self { slice: ptr, height }
     }
 
-    /// Get a slice to the changed [`ticks`](Tick) in this [`ThinColumn`].
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_changed_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.changed_ticks.as_slice(len)
+    pub fn height(&self) -> u8 {
+        self.height
     }
 
-    /// Get a slice to the calling locations that last changed each value in this [`ThinColumn`]
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_changed_by_slice(
-        &self,
-        len: usize,
-    ) -> MaybeLocation<&[UnsafeCell<&'static Location<'static>>]> {
-        self.changed_by
-            .as_ref()
-            .map(|changed_by| changed_by.as_slice(len))
+    pub fn len(&self) -> usize {
+        ops::geometric_series(B as usize, self.height as u32)
+    }
+
+    pub fn root(&self) -> &UnsafeCell<Tick> {
+        unsafe { self.slice.get(0) }
+    }
+
+    pub unsafe fn outer(&self, info: BlockInfo) -> Self {
+        match info {
+            BlockInfo::Upper => {
+                todo!()
+            }
+            BlockInfo::Lower(block_index) => {
+                todo!()
+            }
+        }
+    }
+
+    //TODO: docs/safety comments
+
+    pub fn upper(&self) -> Self {
+        //TODO: this doesn't work for power of two block sizes, weirdly enough.
+        let upper_height = self.height - ops::prev_power_of_two(self.height);
+        let upper_len = ops::geometric_series(B as usize, upper_height as u32);
+
+        let upper_slice = unsafe { self.slice.offset(0, upper_len) };
+
+        // SAFETY:
+        unsafe { TicksBlock::new(upper_slice, upper_height) }
+    }
+
+    pub unsafe fn lower(&self, lower_block_index: usize) -> Self {
+        let lower_height = ops::prev_power_of_two(self.height);
+        let lower_len = ops::geometric_series(B as usize, lower_height as u32);
+        let lower_slice = unsafe { self.slice.offset(lower_len * lower_block_index, lower_len) };
+
+        unsafe { TicksBlock::new(lower_slice, lower_height) }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum BlockInfo {
+    Upper,
+    Lower(u8),
+}
+
+#[derive(Clone)]
+pub struct TicksCursor<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
+    block: TicksBlock<'a, B>,
+    block_info: BlockInfo,
+    global_height: u8,
+}
+
+impl<'a, const B: u8> TicksCursor<'a, B> {
+    pub fn get(&self) -> &UnsafeCell<Tick> {
+        self.block.root()
+    }
+
+    pub fn to_child(&mut self, child_index: u8) -> bool {
+        todo!()
+    }
+
+    pub fn to_next_sibling(&mut self) -> bool {
+        match self.block_info {
+            BlockInfo::Upper => todo!(), //out, proceed as if lower block, down
+            BlockInfo::Lower(i) if i == B - 1 => todo!(), // out, next lower block of outside
+            BlockInfo::Lower(i) => todo!(), //next
+        }
+    }
+
+    pub fn to_prev_sibling(&mut self) -> bool {
+        todo!()
+    }
+
+    pub fn to_parent(&mut self) -> bool {
+        todo!()
+    }
+}
+
+mod ops {
+    /// Returns the greatest power of two less than or equal to `self`, or 0 otherwise.
+    pub const fn prev_power_of_two(n: u8) -> u8 {
+        // n = 0 gives highest_bit_set_idx = 0.
+        let highest_bit_set_idx = 7 - (n | 1).leading_zeros();
+        // Binary AND of highest bit with n is a no-op, except zero gets wiped.
+        (1 << highest_bit_set_idx) & n
+    }
+
+    // geometric series: Σ i=0..n (B^i)
+    pub const fn geometric_series(b: usize, n: u32) -> usize {
+        (b.pow(n + 1) - 1) / (b - 1)
     }
 }
