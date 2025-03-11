@@ -365,8 +365,40 @@ impl ThinColumn {
     }
 }
 
+/// Stores the ticks and caller location for a `ThinColumn`
 pub struct ColumnTicks {
-    pub(super) added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
+    added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
+
+impl ColumnTicks {
+    /// Returns the component data in this column at the given row
+    ///
+    /// # Safety
+    /// - `row` must be within bounds (`row` < len)
+    pub unsafe fn get_added_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
+        todo!()
+    }
+
+    /// Returns the component data in this column at the given row
+    ///
+    /// # Safety
+    /// - `row` must be within bounds (`row` < len)
+    pub unsafe fn get_changed_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
+        todo!()
+    }
+
+    /// Returns the component data in this column at the given row
+    ///
+    /// # Safety
+    /// - `row` must be within bounds (`row` < len)
+    pub unsafe fn get_changed_by_unchecked(
+        &self,
+        row: TableRow,
+    ) -> MaybeLocation<&UnsafeCell<&'static Location<'static>>> {
+        todo!()
+    }
+}
+
+pub struct TicksCursor<'a> {}
