@@ -15,6 +15,7 @@ use crate::{
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, format, vec::Vec};
 pub use bevy_ecs_macros::Component;
+use bevy_platform_support::sync::atomic::AtomicU32;
 use bevy_platform_support::sync::Arc;
 use bevy_platform_support::{
     collections::{HashMap, HashSet},
@@ -2413,6 +2414,7 @@ impl Components {
 ///
 /// *Note* that a system that hasn't been run yet has a `Tick` of 0.
 #[derive(Copy, Clone, Default, Debug, Eq, Hash, PartialEq)]
+#[repr(align(4))]
 #[cfg_attr(
     feature = "bevy_reflect",
     derive(Reflect),
@@ -2485,6 +2487,19 @@ impl Tick {
         } else {
             false
         }
+    }
+
+    // Returns an atomic reference to the internal `u32` of this tick.
+    //
+    // # Safety
+    // - `tick` must outlive the lifetime of 'a
+    // - `tick` must only be used for atomic operations for the lifetime of 'a
+    #[inline]
+    pub(crate) unsafe fn as_atomic<'a>(tick: UnsafeCell<Self>) -> &'a AtomicU32 {
+        // SAFETY:
+        // - `Tick` is `#[repr(align(4))]` which is the same as `AtomicU32`
+        // - `Tick` is a newtype, so the pointer cast is safe
+        unsafe { AtomicU32::from_ptr(tick.get().cast()) }
     }
 }
 

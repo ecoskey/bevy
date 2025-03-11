@@ -17,9 +17,6 @@ use core::panic::Location;
 /// instead of working directly with [`ThinColumn`].
 pub struct ThinColumn {
     pub(super) data: BlobArray,
-    pub(super) added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
 
 impl ThinColumn {
@@ -366,36 +363,10 @@ impl ThinColumn {
     pub unsafe fn get_data_slice<T>(&self, len: usize) -> &[UnsafeCell<T>] {
         self.data.get_sub_slice(len)
     }
+}
 
-    /// Get a slice to the added [`ticks`](Tick) in this [`ThinColumn`].
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_added_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.added_ticks.as_slice(len)
-    }
-
-    /// Get a slice to the changed [`ticks`](Tick) in this [`ThinColumn`].
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_changed_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.changed_ticks.as_slice(len)
-    }
-
-    /// Get a slice to the calling locations that last changed each value in this [`ThinColumn`]
-    ///
-    /// # Safety
-    /// - `len` must match the actual length of this column (number of elements stored)
-    #[inline]
-    pub unsafe fn get_changed_by_slice(
-        &self,
-        len: usize,
-    ) -> MaybeLocation<&[UnsafeCell<&'static Location<'static>>]> {
-        self.changed_by
-            .as_ref()
-            .map(|changed_by| changed_by.as_slice(len))
-    }
+pub struct ColumnTicks {
+    pub(super) added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    pub(super) changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
