@@ -531,6 +531,8 @@ impl<'a, T> ThinSlicePtr<'a, T> {
         // SAFETY: `index` is in-bounds so the resulting pointer is valid to dereference.
         unsafe { &*ptr.add(index) }
     }
+
+    pub unsafe fn offset(self, 
 }
 
 impl<'a, T> Clone for ThinSlicePtr<'a, T> {

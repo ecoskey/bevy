@@ -1,3 +1,4 @@
+use bevy_ptr::ThinSlicePtr;
 use smallvec::SmallVec;
 
 use super::*;
@@ -5,7 +6,7 @@ use crate::{
     change_detection::MaybeLocation,
     storage::{blob_array::BlobArray, thin_array_ptr::ThinArrayPtr},
 };
-use core::{marker::PhantomData, panic::Location};
+use core::{marker::PhantomData, panic::Location, ptr::NonNull};
 
 /// Dense ECS component storage.
 ///
@@ -366,9 +367,11 @@ impl ThinColumn {
     }
 }
 
-pub struct Ticks(ThinArrayPtr<UnsafeCell<Tick>>);
+// Dense ECS tick storage.
+//
+pub struct Ticks<const B: usize>(ThinArrayPtr<UnsafeCell<Tick>>);
 
-impl Ticks {
+impl<const B: usize> Ticks<B> {
     pub fn with_capacity(&self, capacity: usize) -> Self {
         todo!();
     }
@@ -383,5 +386,51 @@ impl Ticks {
 
     pub unsafe fn initialize(&mut self, row: TableRow, tick: Tick) {
         todo!();
+    }
+}
+
+pub struct TicksBlock<'a, const B: usize> {
+    ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>,
+    height: u8,
+}
+
+impl<'a, const B: usize> TicksBlock<'a, B> {
+    // Create a new `TicksBlock` from a thin slice
+    //
+    // # Safety:
+    // - `ptr` must contain a valid packed B-ary tree in van Emde Boas layout.
+    // - `height` must be equal to the height of the tree in `ptr`
+    unsafe fn new(ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>, height: u8) -> Self {
+        Self { ptr, height }
+    }
+
+    pub fn height(&self) -> u8 {
+        self.height
+    }
+
+    pub fn len(&self) -> usize {
+        // geometric series: Σ i=0..height (B^i)
+        (B.pow(self.height as u32 + 1) - 1) / (B - 1)
+    }
+
+    // Create
+    pub unsafe fn upper(&self) -> TicksBlock<B> {
+        // SAFETY: 
+        unsafe { TicksBlock::new(self.ptr, self.height - ops::prev_power_of_two(self.height)) }
+    }
+
+    //
+    pub unsafe fn lower(&self, lower_block_index: usize) -> TickBlock<B> {
+        let ptr = 
+    }
+}
+
+mod ops {
+    /// Returns the greatest power of two less than or equal to `self`, or 0 otherwise.
+    pub const fn prev_power_of_two(n: u8) -> u8 {
+        // n = 0 gives highest_bit_set_idx = 0.
+        let highest_bit_set_idx = 7 - (n | 1).leading_zeros();
+        // Binary AND of highest bit with n is a no-op, except zero gets wiped.
+        (1 << highest_bit_set_idx) & n
     }
 }
