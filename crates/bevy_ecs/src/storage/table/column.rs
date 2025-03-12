@@ -1,9 +1,11 @@
+use smallvec::SmallVec;
+
 use super::*;
 use crate::{
     change_detection::MaybeLocation,
     storage::{blob_array::BlobArray, thin_array_ptr::ThinArrayPtr},
 };
-use core::panic::Location;
+use core::{marker::PhantomData, panic::Location};
 
 /// Dense ECS component storage.
 ///
@@ -17,6 +19,9 @@ use core::panic::Location;
 /// instead of working directly with [`ThinColumn`].
 pub struct ThinColumn {
     pub(super) data: BlobArray,
+    pub(super) added_ticks: Ticks,
+    pub(super) changed_ticks: Ticks,
+    pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
 
 impl ThinColumn {
@@ -29,7 +34,7 @@ impl ThinColumn {
             },
             added_ticks: ThinArrayPtr::with_capacity(capacity),
             changed_ticks: ThinArrayPtr::with_capacity(capacity),
-            changed_by: MaybeLocation::new_with(|| ThinArrayPtr::with_capacity(capacity)),
+            changed_by: todo!(),
         }
     }
 
@@ -317,7 +322,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_added_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.added_ticks.get_unchecked(row.as_usize())
+        self.ticks.get_added_tick_unchecked(row)
     }
 
     /// Returns the changed tick in this column at the given row
@@ -326,7 +331,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_changed_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.changed_ticks.get_unchecked(row.as_usize())
+        self.ticks.get_changed_tick_unchecked(row)
     }
 
     /// Returns the component ticks in this column at the given row
@@ -335,9 +340,7 @@ impl ThinColumn {
     /// - `row` must be within bounds (`row` < len)
     #[inline]
     pub unsafe fn get_ticks_unchecked(&self, row: TableRow) -> ComponentTicks {
-        let added = self.get_added_tick_unchecked(row).read();
-        let changed = self.get_changed_tick_unchecked(row).read();
-        ComponentTicks { added, changed }
+        self.ticks.get_ticks_unchecked(row)
     }
 
     /// Returns the calling location that last modified the given row in this column
@@ -349,9 +352,7 @@ impl ThinColumn {
         &self,
         row: TableRow,
     ) -> MaybeLocation<&UnsafeCell<&'static Location<'static>>> {
-        self.changed_by
-            .as_ref()
-            .map(|changed_by| changed_by.get_unchecked(row.as_usize()))
+        self.ticks.get_changed_by_unchecked(row)
     }
 
     /// Get a slice to the data stored in this [`ThinColumn`].
@@ -365,40 +366,22 @@ impl ThinColumn {
     }
 }
 
-/// Stores the ticks and caller location for a `ThinColumn`
-pub struct ColumnTicks {
-    added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
-}
+pub struct Ticks(ThinArrayPtr<UnsafeCell<Tick>>);
 
-impl ColumnTicks {
-    /// Returns the component data in this column at the given row
-    ///
-    /// # Safety
-    /// - `row` must be within bounds (`row` < len)
-    pub unsafe fn get_added_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        todo!()
+impl Ticks {
+    pub fn with_capacity(&self, capacity: usize) -> Self {
+        todo!();
     }
 
-    /// Returns the component data in this column at the given row
-    ///
-    /// # Safety
-    /// - `row` must be within bounds (`row` < len)
-    pub unsafe fn get_changed_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        todo!()
+    pub unsafe fn get_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
+        todo!();
     }
 
-    /// Returns the component data in this column at the given row
-    ///
-    /// # Safety
-    /// - `row` must be within bounds (`row` < len)
-    pub unsafe fn get_changed_by_unchecked(
-        &self,
-        row: TableRow,
-    ) -> MaybeLocation<&UnsafeCell<&'static Location<'static>>> {
-        todo!()
+    pub unsafe fn swap_remove_unchecked(&mut self, row: TableRow) {
+        todo!();
+    }
+
+    pub unsafe fn initialize(&mut self, row: TableRow, tick: Tick) {
+        todo!();
     }
 }
-
-pub struct TicksCursor<'a> {}
