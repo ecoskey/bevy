@@ -6,7 +6,12 @@ use crate::{
     change_detection::MaybeLocation,
     storage::{blob_array::BlobArray, thin_array_ptr::ThinArrayPtr},
 };
-use core::{marker::PhantomData, panic::Location, ptr::NonNull};
+use core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    panic::Location,
+    ptr::NonNull,
+};
 
 /// Dense ECS component storage.
 ///
@@ -367,41 +372,28 @@ impl ThinColumn {
     }
 }
 
+pub const TICKS_BRANCHING_FACTOR: u8 = 16;
+
 // Dense ECS tick storage.
 //
-pub struct Ticks<const B: usize>(ThinArrayPtr<UnsafeCell<Tick>>);
+pub struct Ticks<const B: u8 = TICKS_BRANCHING_FACTOR>(ThinArrayPtr<UnsafeCell<Tick>>);
 
-impl<const B: usize> Ticks<B> {
-    pub fn with_capacity(&self, capacity: usize) -> Self {
-        todo!();
-    }
+impl<const B: u8> Ticks<B> {}
 
-    pub unsafe fn get_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        todo!();
-    }
-
-    pub unsafe fn swap_remove_unchecked(&mut self, row: TableRow) {
-        todo!();
-    }
-
-    pub unsafe fn initialize(&mut self, row: TableRow, tick: Tick) {
-        todo!();
-    }
-}
-
-pub struct TicksBlock<'a, const B: usize> {
-    ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>,
+#[derive(Clone)]
+pub struct TicksBlock<'a, const B: u8 = TICKS_BRANCHING_FACTOR> {
+    slice: ThinSlicePtr<'a, UnsafeCell<Tick>>,
     height: u8,
 }
 
-impl<'a, const B: usize> TicksBlock<'a, B> {
+impl<'a, const B: u8> TicksBlock<'a, B> {
     // Create a new `TicksBlock` from a thin slice
     //
     // # Safety:
     // - `ptr` must contain a valid packed B-ary tree in van Emde Boas layout.
     // - `height` must be equal to the height of the tree in `ptr`
     unsafe fn new(ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>, height: u8) -> Self {
-        Self { ptr, height }
+        Self { slice: ptr, height }
     }
 
     pub fn height(&self) -> u8 {
@@ -409,19 +401,77 @@ impl<'a, const B: usize> TicksBlock<'a, B> {
     }
 
     pub fn len(&self) -> usize {
-        // geometric series: Σ i=0..height (B^i)
-        (B.pow(self.height as u32 + 1) - 1) / (B - 1)
+        ops::geometric_series(B as usize, self.height as u32)
     }
 
-    // Create
-    pub unsafe fn upper(&self) -> TicksBlock<B> {
-        // SAFETY: 
-        unsafe { TicksBlock::new(self.ptr, self.height - ops::prev_power_of_two(self.height)) }
+    pub fn root(&self) -> &UnsafeCell<Tick> {
+        unsafe { self.slice.get(0) }
     }
 
-    //
-    pub unsafe fn lower(&self, lower_block_index: usize) -> TickBlock<B> {
-        let ptr = 
+    pub unsafe fn outer(&self, info: BlockInfo) -> Self {
+        match info {
+            BlockInfo::Upper => {
+                todo!()
+            }
+            BlockInfo::Lower(block_index) => {
+                todo!()
+            }
+        }
+    }
+
+    //TODO: docs/safety comments
+
+    pub fn upper(&self) -> Self {
+        let upper_height = self.height - ops::prev_power_of_two(self.height);
+        let upper_len = ops::geometric_series(B as usize, upper_height as u32);
+
+        let upper_slice = unsafe { self.slice.offset(0, upper_len) };
+
+        // SAFETY:
+        unsafe { TicksBlock::new(upper_slice, upper_height) }
+    }
+
+    pub unsafe fn lower(&self, lower_block_index: usize) -> Self {
+        let lower_height = ops::prev_power_of_two(self.height);
+        let lower_len = ops::geometric_series(B as usize, lower_height as u32);
+        let lower_slice = unsafe { self.slice.offset(lower_len * lower_block_index, lower_len) };
+
+        unsafe { TicksBlock::new(lower_slice, lower_height) }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum BlockInfo {
+    Upper,
+    Lower(u8),
+}
+
+#[derive(Clone)]
+pub struct TicksCursor<'a, const B: u8 = TICKS_BRANCHING_FACTOR> {
+    block: TicksBlock<'a, B>,
+    block_info: BlockInfo,
+    global_height: u8,
+}
+
+impl<'a, const B: u8> TicksCursor<'a, B> {
+    pub fn get(&self) -> &UnsafeCell<Tick> {
+        self.block.root()
+    }
+
+    pub fn to_child(&mut self, child_index: u8) -> bool {
+        todo!()
+    }
+
+    pub fn to_next_sibling(&mut self) -> bool {
+        todo!()
+    }
+
+    pub fn to_prev_sibling(&mut self) -> bool {
+        todo!()
+    }
+
+    pub fn to_parent(&mut self) -> bool {
+        todo!()
     }
 }
 
@@ -432,5 +482,10 @@ mod ops {
         let highest_bit_set_idx = 7 - (n | 1).leading_zeros();
         // Binary AND of highest bit with n is a no-op, except zero gets wiped.
         (1 << highest_bit_set_idx) & n
+    }
+
+    // geometric series: Σ i=0..n (B^i)
+    pub const fn geometric_series(b: usize, n: u32) -> usize {
+        (b.pow(n + 1) - 1) / (b - 1)
     }
 }
