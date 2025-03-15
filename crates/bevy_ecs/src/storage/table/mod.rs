@@ -18,6 +18,7 @@ use core::{
 
 use super::abort_on_panic;
 mod column;
+mod ticks;
 
 /// An opaque unique ID for a [`Table`] within a [`World`].
 ///

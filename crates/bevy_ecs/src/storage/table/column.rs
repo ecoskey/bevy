@@ -1,9 +1,10 @@
 use bevy_ptr::ThinSlicePtr;
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 use super::*;
 use crate::{
-    change_detection::MaybeLocation,
+    change_detection::{MaybeLocation, TicksMut},
     storage::{blob_array::BlobArray, thin_array_ptr::ThinArrayPtr},
 };
 use core::{
@@ -372,16 +373,16 @@ impl ThinColumn {
     }
 }
 
-pub const TICKS_BRANCHING_FACTOR: u8 = 16;
+pub const TICKS_BRANCH_FACTOR: u8 = 16;
 
 // Dense ECS tick storage.
 //
-pub struct Ticks<const B: u8 = TICKS_BRANCHING_FACTOR>(ThinArrayPtr<UnsafeCell<Tick>>);
+pub struct Ticks<const B: u8 = TICKS_BRANCH_FACTOR>(ThinArrayPtr<UnsafeCell<Tick>>);
 
 impl<const B: u8> Ticks<B> {}
 
 #[derive(Clone)]
-pub struct TicksBlock<'a, const B: u8 = TICKS_BRANCHING_FACTOR> {
+pub struct TicksBlock<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
     slice: ThinSlicePtr<'a, UnsafeCell<Tick>>,
     height: u8,
 }
@@ -422,6 +423,7 @@ impl<'a, const B: u8> TicksBlock<'a, B> {
     //TODO: docs/safety comments
 
     pub fn upper(&self) -> Self {
+        //TODO: this doesn't work for power of two block sizes, weirdly enough.
         let upper_height = self.height - ops::prev_power_of_two(self.height);
         let upper_len = ops::geometric_series(B as usize, upper_height as u32);
 
@@ -447,7 +449,7 @@ enum BlockInfo {
 }
 
 #[derive(Clone)]
-pub struct TicksCursor<'a, const B: u8 = TICKS_BRANCHING_FACTOR> {
+pub struct TicksCursor<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
     block: TicksBlock<'a, B>,
     block_info: BlockInfo,
     global_height: u8,
@@ -463,7 +465,11 @@ impl<'a, const B: u8> TicksCursor<'a, B> {
     }
 
     pub fn to_next_sibling(&mut self) -> bool {
-        todo!()
+        match self.block_info {
+            BlockInfo::Upper => todo!(), //out, proceed as if lower block, down
+            BlockInfo::Lower(i) if i == B - 1 => todo!(), // out, next lower block of outside
+            BlockInfo::Lower(i) => todo!(), //next
+        }
     }
 
     pub fn to_prev_sibling(&mut self) -> bool {
