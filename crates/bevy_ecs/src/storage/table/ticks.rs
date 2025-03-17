@@ -1,4 +1,4 @@
-use core::cell::UnsafeCell;
+use core::{cell::UnsafeCell, sync::atomic::AtomicU32};
 
 use bevy_ptr::ThinSlicePtr;
 
@@ -7,8 +7,16 @@ use crate::{component::Tick, storage::thin_array_ptr::ThinArrayPtr};
 pub const TICKS_BRANCH_FACTOR: u8 = 16;
 
 // Dense ECS tick storage.
-//
-pub struct Ticks<const B: u8 = TICKS_BRANCH_FACTOR>(ThinArrayPtr<UnsafeCell<Tick>>);
+pub struct Ticks<const B: u8 = TICKS_BRANCH_FACTOR> {
+    summary: ThinArrayPtr<UnsafeCell<TickSummary>>,
+    ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+}
+
+struct TickSummary {
+    min: Tick,
+    max: Tick,
+    mask: u32,
+}
 
 impl<const B: u8> Ticks<B> {
     unsafe fn block(&self, height: u8) -> Block<B> {
@@ -18,7 +26,7 @@ impl<const B: u8> Ticks<B> {
 
 #[derive(Clone)]
 struct Block<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
-    slice: ThinSlicePtr<'a, UnsafeCell<Tick>>,
+    slice: ThinSlicePtr<'a, UnsafeCell<TickSummary>>,
     height: u8,
 }
 
