@@ -1,7 +1,7 @@
 #import bevy_pbr::{
     atmosphere::{
         internal::{
-            atmosphere, lut_based_uniforms, MIDPOINT_RATIO,
+            atmosphere, lut_based_settings, MIDPOINT_RATIO,
             sample_medium, L_scattering, view_radius,
             direction_atmosphere_to_world,
             sky_view_lut_uv_to_zenith_azimuth,
@@ -19,12 +19,12 @@
 }
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
-@group(0) @binding(9) var sky_view_lut_out: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(11) var sky_view_lut_out: texture_storage_2d<rgba16float, write>;
 
 @compute
 @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) idx: vec3<u32>) {
-    let uv = vec2<f32>(idx.xy) / vec2<f32>(lut_based_uniforms.settings.sky_view_lut_size);
+    let uv = vec2<f32>(idx.xy) / vec2<f32>(lut_based_settings.sky_view_lut_size);
 
     let r = view_radius();
     var zenith_azimuth = sky_view_lut_uv_to_zenith_azimuth(r, uv);
@@ -35,7 +35,7 @@ fn main(@builtin(global_invocation_id) idx: vec3<u32>) {
     let mu = ray_dir_ws.y;
     let t_max = max_atmosphere_distance(atmosphere.planet, r, mu);
 
-    let sample_count = mix(1.0, f32(lut_based_uniforms.settings.sky_view_lut_samples), clamp(t_max * 0.01, 0.0, 1.0));
+    let sample_count = mix(1.0, f32(lut_based_settings.sky_view_lut_samples), clamp(t_max * 0.01, 0.0, 1.0));
     var total_inscattering = vec3(0.0);
     var throughput = vec3(1.0);
     var prev_t = 0.0;

@@ -1,6 +1,6 @@
 #import bevy_pbr::atmosphere::{
     types::{Atmosphere, AtmosphereSettings},
-    internal::{atmosphere, sample_medium, MIDPOINT_RATIO},
+    internal::{atmosphere, core_settings, sample_medium, MIDPOINT_RATIO},
     functions::{AtmosphereSample, sample_atmosphere, get_local_r, max_atmosphere_distance},
     bruneton_functions::transmittance_lut_uv_to_r_mu,
 }
@@ -9,17 +9,17 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
 
-@group(0) @binding(9) var transmittance_lut_out: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(10) var transmittance_lut_out: texture_storage_2d<rgba16float, write>;
 
 @compute 
 @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) idx: vec3<u32>) {
-    let uv: vec2<f32> = (vec2<f32>(idx.xy) + 0.5) / vec2<f32>(atmosphere.settings.transmittance_lut_size);
+    let uv: vec2<f32> = (vec2<f32>(idx.xy) + 0.5) / vec2<f32>(core_settings.transmittance_lut_size);
     // map UV coordinates to view height (r) and zenith cos angle (mu)
     let r_mu = transmittance_lut_uv_to_r_mu(atmosphere.planet, uv);
 
     // compute the optical depth from view height r to the top atmosphere boundary
-    let optical_depth = ray_optical_depth(r_mu.x, r_mu.y, atmosphere.settings.transmittance_lut_samples);
+    let optical_depth = ray_optical_depth(r_mu.x, r_mu.y, core_settings.transmittance_lut_samples);
     let transmittance = exp(-optical_depth);
 
     textureStore(transmittance_lut_out, idx.xy, vec4(transmittance, 1.0));

@@ -3,7 +3,6 @@
 struct Atmosphere {
     scattering_profile: ScatteringProfile,
     planet: Planet,
-    settings: CoreLutSettings,
 }
 
 struct ScatteringProfile {
@@ -29,19 +28,14 @@ struct Planet {
     space_altitude: f32,
 }
 
-struct CoreLutSettings {
+struct CoreSettings {
     transmittance_lut_size: vec2<u32>,
     multiscattering_lut_size: vec2<u32>,   
     transmittance_lut_samples: u32,
     multiscattering_lut_samples: u32,
 }
 
-struct LutBasedUniforms {
-    transforms: AtmosphereTransforms,
-    settings: AuxLutSettings,
-}
-
-struct AuxLutSettings {
+struct LutBasedSettings {
     sky_view_lut_size: vec2<u32>,
     sky_view_lut_samples: u32,
     aerial_view_lut_samples: u32,

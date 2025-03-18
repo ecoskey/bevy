@@ -11,17 +11,16 @@
 }
  
 
-@group(0) @binding(9) var aerial_view_lut_out: texture_storage_3d<rgba16float, write>;
+@group(0) @binding(10) var aerial_view_lut_out: texture_storage_3d<rgba16float, write>;
 
 @compute
 @workgroup_size(16, 16, 1)
 fn main(@builtin(global_invocation_id) idx: vec3<u32>) {
-    let aerial_view_lut_size = lut_based_uniforms.settings.aerial_view_lut_size;
-    let aerial_view_lut_samples = lut_based_uniforms.settings.aerial_view_lut_samples;
-    let aerial_view_lut_max_distance = lut_based_uniforms.settings.aerial_view_lut_max_distance;
+    let aerial_view_lut_size = lut_based_settings.aerial_view_lut_size;
+    let aerial_view_lut_samples = lut_based_settings.aerial_view_lut_samples;
+    let aerial_view_lut_max_distance = lut_based_settings.aerial_view_lut_max_distance;
 
     if any(idx.xy > aerial_view_lut_size.xy) { return; }
-
 
     let uv = (vec2<f32>(idx.xy) + 0.5) / vec2<f32>(aerial_view_lut_size.xy);
     let ray_dir = uv_to_ray_dir_ws(uv);

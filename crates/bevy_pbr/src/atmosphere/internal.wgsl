@@ -46,15 +46,17 @@
 @group(0) @binding(1) var atmosphere_sampler: sampler;
 
 // uniform bindings 
-@group(0) @binding(2) var<uniform> view: View;
-@group(0) @binding(3) var<uniform> lights: Lights;
-@group(0) @binding(4) var<uniform> lut_based_uniforms: LutBasedUniforms;
+@group(0) @binding(2) var<uniform> core_settings: CoreSettings;
+@group(0) @binding(3) var<uniform> lut_based_uniforms: LutBasedSettings;
+@group(0) @binding(4) var<uniform> atmosphere_transforms: AtmosphereTransforms;
+@group(0) @binding(4) var<uniform> view: View;
+@group(0) @binding(5) var<uniform> lights: Lights;
 
 // luts
-@group(0) @binding(5) var transmittance_lut: texture_2d<f32>;
-@group(0) @binding(6) var multiscattering_lut: texture_2d<f32>;
-@group(0) @binding(7) var sky_view_lut: texture_2d<f32>;
-@group(0) @binding(8) var aerial_view_lut: texture_2d<f32>;
+@group(0) @binding(6) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(7) var multiscattering_lut: texture_2d<f32>;
+@group(0) @binding(8) var sky_view_lut: texture_2d<f32>;
+@group(0) @binding(9) var aerial_view_lut: texture_2d<f32>;
 
 
 // During raymarching, each segment is sampled at a single point. This constant determines
@@ -137,7 +139,7 @@ fn sample_aerial_view_lut(pos_ndc: vec3<f32>) -> vec4<f32> {
 
 // ATMOSPHERE SAMPLING
 
-struct Medium {
+struct MediumSample {
     /// units: n/a
     rayleigh_scattering: vec3<f32>,
 
@@ -153,7 +155,7 @@ struct Medium {
 }
 
 /// Samples the atmosphere medium at a given radius and returns the optical density of each scattering component
-fn sample_medium(r: f32) -> Medium {
+fn sample_medium(r: f32) -> MediumSample {
     let altitude = clamp(r, atmosphere.planet.lower_radius, atmosphere.planet.upper_radius) - atmosphere.planet.lower_radius;
 
     // atmosphere values at altitude
