@@ -76,8 +76,8 @@ use ::core::fmt;
 
 use core::CoreAtmospherePlugin;
 pub use core::{
-    ExtractedAtmosphere, Luts as CoreAtmosphereLuts, Settings as AtmosphereSettings,
-    UniformsBuffer as AtmosphereUniforms, UniformsIndex as AtmosphereUniformIndex,
+    ExtractedAtmosphere, GpuAtmosphereBuffer, GpuAtmosphereIndex, Luts as CoreAtmosphereLuts,
+    Settings as AtmosphereSettings,
 };
 pub use lut_based::{Luts as AuxAtmosphereLuts, Settings as LutBasedAtmosphericScatteringSettings};
 
@@ -405,6 +405,7 @@ pub fn extract_atmospheric_scattering(
 #[derive(Component, Clone, Reflect, ExtractComponent)]
 #[extract_component_filter(With<AtmosphericScattering>)]
 #[reflect(Component)]
+#[non_exhaustive]
 pub enum AtmosphericScatteringSettings {
     LutBased(LutBasedAtmosphericScatteringSettings),
     //this is an enum so that raytracing support can be added without a breaking change

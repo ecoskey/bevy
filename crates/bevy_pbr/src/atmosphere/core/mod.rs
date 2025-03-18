@@ -13,10 +13,13 @@ use bevy_ecs::{
 use bevy_math::{UVec2, Vec3};
 use bevy_reflect::Reflect;
 use bevy_render::{
+    extract_component::{ComponentUniforms, UniformComponentPlugin},
     graph::CameraDriverLabel,
     render_graph::RenderGraph,
     render_resource::{
-        binding_types::{sampler, storage_buffer_read_only, texture_2d, texture_storage_2d},
+        binding_types::{
+            sampler, storage_buffer_read_only, texture_2d, texture_storage_2d, uniform_buffer,
+        },
         BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, BindingResource,
         CachedComputePipelineId, ComputePipelineDescriptor, DynamicStorageBuffer, Extent3d,
         FilterMode, PipelineCache, Sampler, SamplerBindingType, SamplerDescriptor, Shader,
@@ -61,6 +64,8 @@ impl Plugin for CoreAtmospherePlugin {
             "multiscattering_lut.wgsl",
             Shader::from_wgsl
         );
+
+        app.add_plugins(UniformComponentPlugin::<Settings>::default());
     }
 
     fn finish(&self, app: &mut App) {
@@ -77,7 +82,7 @@ impl Plugin for CoreAtmospherePlugin {
         render_app
             .init_resource::<Layout>()
             .init_resource::<Pipelines>()
-            .init_resource::<UniformsBuffer>()
+            .init_resource::<GpuAtmosphereBuffer>()
             .add_systems(ExtractSchedule, extract_atmospheres)
             .add_systems(
                 Render,
@@ -157,27 +162,26 @@ impl From<Planet> for GpuPlanet {
 }
 
 #[derive(ShaderType, Component, Clone)]
-pub struct Uniforms {
+pub struct GpuAtmosphere {
     profile: ScatteringProfile,
     planet: GpuPlanet,
-    settings: Settings,
 }
 
 #[derive(Resource, Default)]
-pub struct UniformsBuffer {
-    uniforms: DynamicStorageBuffer<Uniforms>,
+pub struct GpuAtmosphereBuffer {
+    uniforms: DynamicStorageBuffer<GpuAtmosphere>,
 }
 
-impl UniformsBuffer {
+impl GpuAtmosphereBuffer {
     pub fn binding(&self) -> Option<BindingResource> {
         self.uniforms.binding()
     }
 }
 
 #[derive(Component)]
-pub struct UniformsIndex(u32);
+pub struct GpuAtmosphereIndex(u32);
 
-impl UniformsIndex {
+impl GpuAtmosphereIndex {
     pub fn index(&self) -> u32 {
         self.0
     }
@@ -189,7 +193,7 @@ pub struct ExtractedAtmosphere;
 pub fn extract_atmospheres(
     atmospheres: Extract<Query<(RenderEntity, &Atmosphere, &Settings, &Planet)>>,
     scattering_profiles: Extract<Res<Assets<ScatteringProfile>>>,
-    mut uniforms: ResMut<UniformsBuffer>,
+    mut uniforms: ResMut<GpuAtmosphereBuffer>,
     mut commands: Commands,
 ) {
     uniforms.uniforms.clear();
@@ -199,15 +203,14 @@ pub fn extract_atmospheres(
             continue; //TODO: check this doesn't cause problems
         };
 
-        let uniform = Uniforms {
+        let atmosphere = GpuAtmosphere {
             profile,
             planet: planet.clone().into(),
-            settings: settings.clone(),
         };
 
         commands.entity(render_entity).insert((
             settings.clone(),
-            UniformsIndex(uniforms.uniforms.push(uniform)),
+            GpuAtmosphereIndex(uniforms.uniforms.push(atmosphere)),
             TemporaryRenderEntity,
             ExtractedAtmosphere,
         ));
@@ -215,7 +218,7 @@ pub fn extract_atmospheres(
 }
 
 pub fn prepare_uniforms(
-    mut uniforms: ResMut<UniformsBuffer>,
+    mut uniforms: ResMut<GpuAtmosphereBuffer>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) {
@@ -239,10 +242,11 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<Uniforms>(true)),
+                    (0, storage_buffer_read_only::<GpuAtmosphere>(true)),
+                    (2, uniform_buffer::<Settings>(true)),
                     (
                         // transmittance lut storage texture
-                        9,
+                        10,
                         texture_storage_2d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -257,12 +261,13 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<Uniforms>(true)),
+                    (0, storage_buffer_read_only::<GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (5, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (2, uniform_buffer::<Settings>(true)),
+                    (6, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
                     (
                         // multiscattering lut storage texture
-                        9,
+                        10,
                         texture_storage_2d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -392,21 +397,27 @@ pub struct BindGroups {
 fn prepare_bind_groups(
     atmospheres: Query<(Entity, &Luts), With<ExtractedAtmosphere>>,
     render_device: Res<RenderDevice>,
-    uniforms: Res<UniformsBuffer>,
+    atmosphere: Res<GpuAtmosphereBuffer>,
+    settings: Res<ComponentUniforms<Settings>>,
     layout: Res<Layout>,
     mut commands: Commands,
 ) {
-    let uniforms_binding = uniforms
+    let atmosphere_binding = atmosphere
         .binding()
         .expect("Failed to prepare atmosphere bind groups. Atmosphere storage buffer missing");
+
+    let settings_binding = settings.binding().expect(
+        "Failed to prepare atmosphere bind groups. AtmosphereSettings uniform buffer missing",
+    );
 
     for (entity, core_luts) in &atmospheres {
         let transmittance_lut = render_device.create_bind_group(
             "transmittance_lut_bind_group",
             &layout.transmittance_lut,
             &BindGroupEntries::with_indices((
-                (0, uniforms_binding.clone()),
-                (9, &core_luts.transmittance_lut.default_view),
+                (0, atmosphere_binding.clone()),
+                (2, settings_binding.clone()),
+                (10, &core_luts.transmittance_lut.default_view),
             )),
         );
 
@@ -414,10 +425,11 @@ fn prepare_bind_groups(
             "multiscattering_lut_bind_group",
             &layout.multiscattering_lut,
             &BindGroupEntries::with_indices((
-                (0, uniforms_binding.clone()),
+                (0, atmosphere_binding.clone()),
                 (1, &layout.sampler),
-                (5, &core_luts.transmittance_lut.default_view),
-                (9, &core_luts.multiscattering_lut.default_view),
+                (2, settings_binding.clone()),
+                (6, &core_luts.transmittance_lut.default_view),
+                (10, &core_luts.multiscattering_lut.default_view),
             )),
         );
 

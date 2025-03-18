@@ -4,6 +4,7 @@ use bevy_ecs::{
     world::{FromWorld, World},
 };
 use bevy_render::{
+    extract_component::DynamicUniformIndex,
     render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel},
     render_resource::{ComputePassDescriptor, PipelineCache},
     renderer::RenderContext,
@@ -14,21 +15,20 @@ use crate::atmosphere::core;
 #[derive(RenderLabel, PartialEq, Eq, Hash, Debug, Copy, Clone)]
 pub struct LutsLabel;
 
+type LutsNodeQuery = (
+    Read<core::GpuAtmosphereIndex>,
+    Read<core::BindGroups>,
+    Read<core::Settings>,
+    Read<DynamicUniformIndex<core::Settings>>,
+);
+
 pub(super) struct LutsNode {
-    query_state: QueryState<(
-        Read<core::Settings>,
-        Read<core::BindGroups>,
-        Read<core::UniformsIndex>,
-    )>,
+    query_state: QueryState<LutsNodeQuery>,
 }
 
 impl FromWorld for LutsNode {
     fn from_world(world: &mut World) -> Self {
-        let query_state = world.query::<(
-            Read<core::Settings>,
-            Read<core::BindGroups>,
-            Read<core::UniformsIndex>,
-        )>();
+        let query_state = world.query::<LutsNodeQuery>();
         Self { query_state }
     }
 }
@@ -59,10 +59,14 @@ impl Node for LutsNode {
 
         core_luts_pass.set_pipeline(&transmittance_lut_pipeline);
 
-        for (core_settings, core_bind_groups, core::UniformsIndex(idx)) in
+        for (gpu_atmosphere_index, core_bind_groups, core_settings, core_settings_index) in
             &self.query_state.query_manual(world)
         {
-            core_luts_pass.set_bind_group(0, &core_bind_groups.transmittance_lut, &[*idx, *idx]);
+            core_luts_pass.set_bind_group(
+                0,
+                &core_bind_groups.transmittance_lut,
+                &[gpu_atmosphere_index.index(), core_settings_index.index()],
+            );
 
             const WORKGROUP_SIZE: u32 = 16;
             let workgroups_x = core_settings
@@ -79,10 +83,14 @@ impl Node for LutsNode {
 
         core_luts_pass.set_pipeline(&multiscattering_lut_pipeline);
 
-        for (core_settings, core_bind_groups, core::UniformsIndex(idx)) in
+        for (gpu_atmosphere_index, core_bind_groups, core_settings, core_settings_index) in
             &self.query_state.query_manual(world)
         {
-            core_luts_pass.set_bind_group(0, &core_bind_groups.multiscattering_lut, &[*idx, *idx]);
+            core_luts_pass.set_bind_group(
+                0,
+                &core_bind_groups.multiscattering_lut,
+                &[gpu_atmosphere_index.index(), core_settings_index.index()],
+            );
 
             let workgroups_x = core_settings.transmittance_lut_size.x;
             let workgroups_y = core_settings.transmittance_lut_size.y;

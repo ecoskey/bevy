@@ -20,7 +20,9 @@ use bevy_math::{Mat4, UVec2, UVec3, Vec3};
 use bevy_reflect::Reflect;
 use bevy_render::{
     camera::ExtractedCamera,
-    extract_component::{ComponentUniforms, UniformComponentPlugin},
+    extract_component::{
+        ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
+    },
     render_graph::RenderGraphApp,
     render_resource::{
         binding_types::{
@@ -85,8 +87,11 @@ impl Plugin for LutBasedAtmospherePlugin {
             Shader::from_wgsl
         );
 
-        app.register_type::<Settings>()
-            .add_plugins(UniformComponentPlugin::<Uniforms>::default());
+        app.register_type::<Settings>().add_plugins((
+            ExtractComponentPlugin::<Settings>::default(),
+            UniformComponentPlugin::<Settings>::default(),
+            UniformComponentPlugin::<AtmosphereTransforms>::default(),
+        ));
     }
 
     fn finish(&self, app: &mut App) {
@@ -108,7 +113,7 @@ impl Plugin for LutBasedAtmospherePlugin {
                 Render,
                 (
                     queue_render_sky_pipelines.in_set(RenderSet::Queue),
-                    prepare_uniforms.before(RenderSet::PrepareResources),
+                    prepare_transforms.before(RenderSet::PrepareResources),
                     prepare_luts.in_set(RenderSet::PrepareResources),
                     prepare_bind_groups.in_set(RenderSet::PrepareBindGroups),
                 ),
@@ -141,7 +146,7 @@ impl Plugin for LutBasedAtmospherePlugin {
 /// The aerial-view lut is a 3d LUT fit to the view frustum, which stores the luminance
 /// scattered towards the camera at each point (RGB channels), alongside the average
 /// transmittance to that point (A channel).
-#[derive(Clone, Reflect, ShaderType)]
+#[derive(Clone, Reflect, ShaderType, Component, ExtractComponent)]
 #[type_path = "bevy_pbr::atmosphere::LutBasedAtmosphericScatteringSettings"]
 pub struct Settings {
     /// The size of the sky-view LUT.
@@ -179,26 +184,17 @@ impl Default for Settings {
     }
 }
 
-#[derive(ShaderType, Clone)]
+#[derive(ShaderType, Clone, Component)]
 pub struct AtmosphereTransforms {
     world_from_atmosphere: Mat4,
     atmosphere_from_world: Mat4,
 }
 
-#[derive(Component, ShaderType, Clone)]
-pub struct Uniforms {
-    transforms: AtmosphereTransforms,
-    settings: Settings,
-}
-
-pub fn prepare_uniforms(
-    views: Query<
-        (Entity, &ExtractedView, &AtmosphericScatteringSettings),
-        (With<Camera3d>, With<AtmosphericScattering>),
-    >,
+pub fn prepare_transforms(
+    views: Query<(Entity, &ExtractedView), (With<Camera3d>, With<AtmosphericScattering>)>,
     mut commands: Commands,
 ) {
-    for (entity, view, AtmosphericScatteringSettings::LutBased(settings)) in &views {
+    for (entity, view) in &views {
         let world_from_view = view.world_from_view.compute_matrix();
         let camera_z = world_from_view.z_axis.truncate();
         let camera_y = world_from_view.y_axis.truncate();
@@ -222,10 +218,7 @@ pub fn prepare_uniforms(
             atmosphere_from_world,
         };
 
-        commands.entity(entity).insert(Uniforms {
-            transforms,
-            settings: settings.clone(),
-        });
+        commands.entity(entity).insert(transforms);
     }
 }
 
@@ -246,7 +239,7 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<core::Uniforms>(true)),
+                    (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
                     (2, uniform_buffer::<ViewUniform>(true)),
                     (3, uniform_buffer::<GpuLights>(true)),
@@ -269,7 +262,7 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<core::Uniforms>(true)),
+                    (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
                     (2, uniform_buffer::<ViewUniform>(true)),
                     (3, uniform_buffer::<GpuLights>(true)),
@@ -292,11 +285,12 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<core::Uniforms>(true)),
+                    (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (2, uniform_buffer::<ViewUniform>(true)),
-                    (3, uniform_buffer::<GpuLights>(true)),
-                    (5, uniform_buffer::<Uniforms>(true)),
+                    (4, uniform_buffer::<Settings>(true)),
+                    (5, uniform_buffer::<AtmosphereTransforms>(true)),
+                    (6, uniform_buffer::<ViewUniform>(true)),
+                    (7, uniform_buffer::<GpuLights>(true)),
                     (6, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
                     (8, texture_2d(TextureSampleType::Float { filterable: true })), // sky view lut
                     (9, texture_2d(TextureSampleType::Float { filterable: true })), // aerial view lut
@@ -310,7 +304,7 @@ impl FromWorld for Layout {
             &BindGroupLayoutEntries::with_indices(
                 ShaderStages::COMPUTE,
                 (
-                    (0, storage_buffer_read_only::<core::Uniforms>(true)),
+                    (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
                     (2, uniform_buffer::<ViewUniform>(true)),
                     (3, uniform_buffer::<GpuLights>(true)),
@@ -542,8 +536,8 @@ fn prepare_bind_groups(
     >,
     atmospheres: Query<&core::Luts, With<ExtractedAtmosphere>>,
     render_device: Res<RenderDevice>,
-    core_uniforms: Res<core::UniformsBuffer>,
-    lut_based_uniforms: Res<ComponentUniforms<Uniforms>>,
+    core_uniforms: Res<core::GpuAtmosphereBuffer>,
+    lut_based_settings: Res<ComponentUniforms<Settings>>,
     view_uniforms: Res<ViewUniforms>,
     lights_uniforms: Res<LightMeta>,
     layout: Res<Layout>,
@@ -553,7 +547,7 @@ fn prepare_bind_groups(
         .binding()
         .expect("Failed to prepare atmosphere bind groups. Atmosphere storage buffer missing");
 
-    let lut_based_uniforms_binding = lut_based_uniforms.binding().expect(
+    let lut_based_uniforms_binding = lut_based_settings.binding().expect(
         "Failed to prepare atmosphere bind groups. Lut-based atmosphere uniform buffer missing",
     );
 

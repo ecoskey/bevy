@@ -49,14 +49,14 @@
 @group(0) @binding(2) var<uniform> core_settings: CoreSettings;
 @group(0) @binding(3) var<uniform> lut_based_uniforms: LutBasedSettings;
 @group(0) @binding(4) var<uniform> atmosphere_transforms: AtmosphereTransforms;
-@group(0) @binding(4) var<uniform> view: View;
-@group(0) @binding(5) var<uniform> lights: Lights;
+@group(0) @binding(5) var<uniform> view: View;
+@group(0) @binding(6) var<uniform> lights: Lights;
 
 // luts
-@group(0) @binding(6) var transmittance_lut: texture_2d<f32>;
-@group(0) @binding(7) var multiscattering_lut: texture_2d<f32>;
-@group(0) @binding(8) var sky_view_lut: texture_2d<f32>;
-@group(0) @binding(9) var aerial_view_lut: texture_2d<f32>;
+@group(0) @binding(7) var transmittance_lut: texture_2d<f32>;
+@group(0) @binding(8) var multiscattering_lut: texture_2d<f32>;
+@group(0) @binding(9) var sky_view_lut: texture_2d<f32>;
+@group(0) @binding(10) var aerial_view_lut: texture_2d<f32>;
 
 
 // During raymarching, each segment is sampled at a single point. This constant determines

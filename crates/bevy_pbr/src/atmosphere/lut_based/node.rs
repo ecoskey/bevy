@@ -27,13 +27,13 @@ pub struct LutsNode {
             Read<AtmosphericScattering>,
             Read<AtmosphericScatteringSettings>,
             Read<lut_based::BindGroups>,
-            Read<DynamicUniformIndex<lut_based::Uniforms>>,
+            Read<DynamicUniformIndex<lut_based::Settings>>,
             Read<ViewUniformOffset>,
             Read<ViewLightsUniformOffset>,
         ),
         With<ExtractedView>,
     >,
-    atmospheres: QueryState<Read<core::UniformsIndex>, With<ExtractedAtmosphere>>,
+    atmospheres: QueryState<Read<core::GpuAtmosphereIndex>, With<ExtractedAtmosphere>>,
 }
 
 impl FromWorld for LutsNode {
@@ -139,7 +139,7 @@ pub struct ResolveNode {
         ),
         With<ExtractedView>,
     >,
-    atmospheres: QueryState<Read<core::UniformsIndex>, With<ExtractedAtmosphere>>,
+    atmospheres: QueryState<Read<core::GpuAtmosphereIndex>, With<ExtractedAtmosphere>>,
 }
 
 impl FromWorld for ResolveNode {
