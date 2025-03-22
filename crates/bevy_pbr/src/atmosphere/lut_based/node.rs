@@ -59,15 +59,15 @@ impl Node for LutsNode {
             AtmosphericScattering(atmosphere),
             AtmosphericScatteringSettings::LutBased(settings),
             bind_groups,
-            lut_based_uniforms_offset,
-            view_uniforms_offset,
-            lights_uniforms_offset,
+            lut_based_settings_index,
+            view_uniforms_index,
+            lights_uniforms_index,
         )) = views_query.get(graph.view_entity())
         else {
             return Ok(());
         };
 
-        let Ok(core_uniforms_offset) = atmospheres_query.get(*atmosphere) else {
+        let Ok(core_settings_index) = atmospheres_query.get(*atmosphere) else {
             return Ok(());
         };
 
@@ -96,10 +96,10 @@ impl Node for LutsNode {
 
         // Sky View LUT
         let offsets = &[
-            core_uniforms_offset.index(),
-            view_uniforms_offset.offset,
-            lights_uniforms_offset.offset,
-            lut_based_uniforms_offset.index(),
+            core_settings_index.index(),
+            view_uniforms_index.offset,
+            lights_uniforms_index.offset,
+            lut_based_settings_index.index(),
         ];
 
         luts_pass.set_pipeline(sky_view_lut_pipeline);
@@ -131,7 +131,7 @@ pub struct ResolveNode {
         (
             Read<AtmosphericScattering>,
             Read<lut_based::BindGroups>,
-            Read<DynamicUniformIndex<lut_based::Uniforms>>,
+            Read<DynamicUniformIndex<lut_based::Settings>>,
             Read<ViewUniformOffset>,
             Read<ViewLightsUniformOffset>,
             Read<lut_based::ResolvePipelineId>,

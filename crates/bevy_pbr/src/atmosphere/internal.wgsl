@@ -286,12 +286,12 @@ fn ndc_to_camera_dist(ndc: vec3<f32>) -> f32 {
 
 /// Converts a direction in world space to atmosphere space
 fn direction_world_to_atmosphere(dir_ws: vec3<f32>) -> vec3<f32> {
-    let dir_as = lut_based_uniforms.transforms.atmosphere_from_world * vec4(dir_ws, 0.0);
+    let dir_as = atmosphere_transforms.atmosphere_from_world * vec4(dir_ws, 0.0);
     return dir_as.xyz;
 }
 
 /// Converts a direction in atmosphere space to world space
 fn direction_atmosphere_to_world(dir_as: vec3<f32>) -> vec3<f32> {
-    let dir_ws = lut_based_uniforms.transforms.world_from_atmosphere * vec4(dir_as, 0.0);
+    let dir_ws = atmosphere_transforms.world_from_atmosphere * vec4(dir_as, 0.0);
     return dir_ws.xyz;
 }

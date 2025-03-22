@@ -246,7 +246,7 @@ impl FromWorld for Layout {
                     (2, uniform_buffer::<Settings>(true)),
                     (
                         // transmittance lut storage texture
-                        10,
+                        11,
                         texture_storage_2d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -264,10 +264,10 @@ impl FromWorld for Layout {
                     (0, storage_buffer_read_only::<GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
                     (2, uniform_buffer::<Settings>(true)),
-                    (6, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
                     (
                         // multiscattering lut storage texture
-                        10,
+                        11,
                         texture_storage_2d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -417,7 +417,7 @@ fn prepare_bind_groups(
             &BindGroupEntries::with_indices((
                 (0, atmosphere_binding.clone()),
                 (2, settings_binding.clone()),
-                (10, &core_luts.transmittance_lut.default_view),
+                (11, &core_luts.transmittance_lut.default_view),
             )),
         );
 
@@ -428,8 +428,8 @@ fn prepare_bind_groups(
                 (0, atmosphere_binding.clone()),
                 (1, &layout.sampler),
                 (2, settings_binding.clone()),
-                (6, &core_luts.transmittance_lut.default_view),
-                (10, &core_luts.multiscattering_lut.default_view),
+                (7, &core_luts.transmittance_lut.default_view),
+                (12, &core_luts.multiscattering_lut.default_view),
             )),
         );
 

@@ -57,7 +57,7 @@ impl Node for LutsNode {
                     timestamp_writes: None,
                 });
 
-        core_luts_pass.set_pipeline(&transmittance_lut_pipeline);
+        core_luts_pass.set_pipeline(transmittance_lut_pipeline);
 
         for (gpu_atmosphere_index, core_bind_groups, core_settings, core_settings_index) in
             &self.query_state.query_manual(world)
@@ -81,7 +81,7 @@ impl Node for LutsNode {
             core_luts_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
-        core_luts_pass.set_pipeline(&multiscattering_lut_pipeline);
+        core_luts_pass.set_pipeline(multiscattering_lut_pipeline);
 
         for (gpu_atmosphere_index, core_bind_groups, core_settings, core_settings_index) in
             &self.query_state.query_manual(world)

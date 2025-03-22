@@ -241,13 +241,14 @@ impl FromWorld for Layout {
                 (
                     (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (2, uniform_buffer::<ViewUniform>(true)),
-                    (3, uniform_buffer::<GpuLights>(true)),
-                    (4, uniform_buffer::<Uniforms>(true)),
-                    (5, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
-                    (6, texture_2d(TextureSampleType::Float { filterable: true })), // multiscattering lut
+                    (3, uniform_buffer::<Settings>(true)),
+                    (4, uniform_buffer::<AtmosphereTransforms>(true)),
+                    (5, uniform_buffer::<ViewUniform>(true)),
+                    (6, uniform_buffer::<GpuLights>(true)),
+                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (8, texture_2d(TextureSampleType::Float { filterable: true })), // multiscattering lut
                     (
-                        9,
+                        11,
                         texture_storage_2d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -264,13 +265,14 @@ impl FromWorld for Layout {
                 (
                     (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (2, uniform_buffer::<ViewUniform>(true)),
-                    (3, uniform_buffer::<GpuLights>(true)),
-                    (4, uniform_buffer::<Uniforms>(true)),
-                    (5, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
-                    (6, texture_2d(TextureSampleType::Float { filterable: true })), // mulitscattering lut
+                    (3, uniform_buffer::<Settings>(true)),
+                    (4, uniform_buffer::<AtmosphereTransforms>(true)),
+                    (5, uniform_buffer::<ViewUniform>(true)),
+                    (6, uniform_buffer::<GpuLights>(true)),
+                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (8, texture_2d(TextureSampleType::Float { filterable: true })), // mulitscattering lut
                     (
-                        9,
+                        11,
                         texture_storage_3d(
                             TextureFormat::Rgba16Float,
                             StorageTextureAccess::WriteOnly,
@@ -287,14 +289,18 @@ impl FromWorld for Layout {
                 (
                     (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (4, uniform_buffer::<Settings>(true)),
-                    (5, uniform_buffer::<AtmosphereTransforms>(true)),
-                    (6, uniform_buffer::<ViewUniform>(true)),
-                    (7, uniform_buffer::<GpuLights>(true)),
-                    (6, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
-                    (8, texture_2d(TextureSampleType::Float { filterable: true })), // sky view lut
-                    (9, texture_2d(TextureSampleType::Float { filterable: true })), // aerial view lut
-                    (10, texture_depth_2d()), // view depth texture
+                    (3, uniform_buffer::<Settings>(true)),
+                    (4, uniform_buffer::<AtmosphereTransforms>(true)),
+                    (5, uniform_buffer::<ViewUniform>(true)),
+                    (6, uniform_buffer::<GpuLights>(true)),
+                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (9, texture_2d(TextureSampleType::Float { filterable: true })), // sky view lut
+                    (
+                        // aerial view lut
+                        10,
+                        texture_2d(TextureSampleType::Float { filterable: true }),
+                    ),
+                    (11, texture_depth_2d()), // view depth texture
                 ),
             ),
         );
@@ -306,13 +312,18 @@ impl FromWorld for Layout {
                 (
                     (0, storage_buffer_read_only::<core::GpuAtmosphere>(true)),
                     (1, sampler(SamplerBindingType::Filtering)),
-                    (2, uniform_buffer::<ViewUniform>(true)),
-                    (3, uniform_buffer::<GpuLights>(true)),
-                    (4, uniform_buffer::<Uniforms>(true)),
-                    (5, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
-                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // sky view lut
-                    (8, texture_2d(TextureSampleType::Float { filterable: true })), // aerial view lut
-                    (9, texture_depth_2d_multisampled()), // view depth texture
+                    (3, uniform_buffer::<Settings>(true)),
+                    (4, uniform_buffer::<AtmosphereTransforms>(true)),
+                    (5, uniform_buffer::<ViewUniform>(true)),
+                    (6, uniform_buffer::<GpuLights>(true)),
+                    (7, texture_2d(TextureSampleType::Float { filterable: true })), // transmittance lut
+                    (9, texture_2d(TextureSampleType::Float { filterable: true })), // sky view lut
+                    (
+                        // aerial view lut
+                        10,
+                        texture_2d(TextureSampleType::Float { filterable: true }),
+                    ),
+                    (11, texture_depth_2d_multisampled()), // view depth texture
                 ),
             ),
         );
@@ -538,17 +549,22 @@ fn prepare_bind_groups(
     render_device: Res<RenderDevice>,
     core_uniforms: Res<core::GpuAtmosphereBuffer>,
     lut_based_settings: Res<ComponentUniforms<Settings>>,
+    transforms: Res<ComponentUniforms<AtmosphereTransforms>>,
     view_uniforms: Res<ViewUniforms>,
     lights_uniforms: Res<LightMeta>,
     layout: Res<Layout>,
     mut commands: Commands,
 ) {
-    let core_uniforms_binding = core_uniforms
+    let atmosphere_binding = core_uniforms
         .binding()
         .expect("Failed to prepare atmosphere bind groups. Atmosphere storage buffer missing");
 
-    let lut_based_uniforms_binding = lut_based_settings.binding().expect(
-        "Failed to prepare atmosphere bind groups. Lut-based atmosphere uniform buffer missing",
+    let settings_binding = lut_based_settings.binding().expect(
+        "Failed to prepare atmosphere bind groups. Lut-based atmosphere settings uniform buffer missing",
+    );
+
+    let transforms_binding = transforms.binding().expect(
+        "Failed to prepare atmosphere bind groups. Atmosphere transforms uniform buffer missing",
     );
 
     let view_binding = view_uniforms
@@ -570,14 +586,15 @@ fn prepare_bind_groups(
             "sky_view_lut_bind_group",
             &layout.sky_view_lut,
             &BindGroupEntries::with_indices((
-                (0, core_uniforms_binding.clone()),
+                (0, atmosphere_binding.clone()),
                 (1, &layout.sampler),
-                (2, view_binding.clone()),
-                (3, lights_binding.clone()),
-                (4, lut_based_uniforms_binding.clone()),
-                (5, &core_luts.transmittance_lut.default_view),
-                (6, &core_luts.multiscattering_lut.default_view),
-                (9, &aux_luts.sky_view_lut.default_view),
+                (3, settings_binding.clone()),
+                (4, transforms_binding.clone()),
+                (5, view_binding.clone()),
+                (6, lights_binding.clone()),
+                (7, &core_luts.transmittance_lut.default_view),
+                (8, &core_luts.multiscattering_lut.default_view),
+                (11, &aux_luts.sky_view_lut.default_view),
             )),
         );
 
@@ -585,14 +602,15 @@ fn prepare_bind_groups(
             "aerial_view_lut_bind_group",
             &layout.aerial_view_lut,
             &BindGroupEntries::with_indices((
-                (0, core_uniforms_binding.clone()),
+                (0, atmosphere_binding.clone()),
                 (1, &layout.sampler),
-                (2, view_binding.clone()),
-                (3, lights_binding.clone()),
-                (4, lut_based_uniforms_binding.clone()),
-                (5, &core_luts.transmittance_lut.default_view),
-                (6, &core_luts.multiscattering_lut.default_view),
-                (9, &aux_luts.aerial_view_lut.default_view),
+                (3, settings_binding.clone()),
+                (4, transforms_binding.clone()),
+                (5, view_binding.clone()),
+                (6, lights_binding.clone()),
+                (7, &core_luts.transmittance_lut.default_view),
+                (8, &core_luts.multiscattering_lut.default_view),
+                (11, &aux_luts.aerial_view_lut.default_view),
             )),
         );
 
@@ -606,16 +624,16 @@ fn prepare_bind_groups(
             "resolve_atmosphere_bind_group",
             resolve_atmosphere_layout,
             &BindGroupEntries::with_indices((
-                (0, core_uniforms_binding.clone()),
+                (0, atmosphere_binding.clone()),
                 (1, &layout.sampler),
-                (2, view_binding.clone()),
-                (3, lights_binding.clone()),
-                (4, lut_based_uniforms_binding.clone()),
-                (5, &core_luts.transmittance_lut.default_view),
-                (6, &core_luts.multiscattering_lut.default_view),
-                (7, &aux_luts.sky_view_lut.default_view),
-                (8, &aux_luts.aerial_view_lut.default_view),
-                (9, view_depth_texture.view()),
+                (3, settings_binding.clone()),
+                (4, transforms_binding.clone()),
+                (5, view_binding.clone()),
+                (6, lights_binding.clone()),
+                (7, &core_luts.transmittance_lut.default_view),
+                (9, &aux_luts.sky_view_lut.default_view),
+                (10, &aux_luts.aerial_view_lut.default_view),
+                (11, view_depth_texture.view()),
             )),
         );
 

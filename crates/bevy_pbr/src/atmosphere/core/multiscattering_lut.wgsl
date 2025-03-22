@@ -13,7 +13,7 @@
 
 #import bevy_render::maths::{PI, FRAC_4_PI, r2_seq, unit_square_to_sphere}
 
-@group(0) @binding(10) var multiscattering_lut_out: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(11) var multiscattering_lut_out: texture_storage_2d<rgba16float, write>;
 
 // Shared memory arrays for workgroup communication
 var<workgroup> multi_scat_shared_mem: array<vec3<f32>, 64>;
