@@ -3,7 +3,7 @@
     atmosphere::{
         types::{Atmosphere, AtmosphereSettings},
         internal::{
-            lut_based_uniforms, sample_medium, L_scattering,
+            lut_based_settings, sample_medium, L_scattering,
             MIDPOINT_RATIO, uv_to_ray_dir_ws, view_radius
         },
         functions::{get_local_r, get_local_up, max_atmosphere_distance},

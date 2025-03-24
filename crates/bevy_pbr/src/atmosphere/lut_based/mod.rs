@@ -547,7 +547,7 @@ fn prepare_bind_groups(
     >,
     atmospheres: Query<&core::Luts, With<ExtractedAtmosphere>>,
     render_device: Res<RenderDevice>,
-    core_uniforms: Res<core::GpuAtmosphereBuffer>,
+    atmosphere_buffer: Res<core::GpuAtmosphereBuffer>,
     lut_based_settings: Res<ComponentUniforms<Settings>>,
     transforms: Res<ComponentUniforms<AtmosphereTransforms>>,
     view_uniforms: Res<ViewUniforms>,
@@ -555,7 +555,7 @@ fn prepare_bind_groups(
     layout: Res<Layout>,
     mut commands: Commands,
 ) {
-    let atmosphere_binding = core_uniforms
+    let atmosphere_binding = atmosphere_buffer
         .binding()
         .expect("Failed to prepare atmosphere bind groups. Atmosphere storage buffer missing");
 

@@ -1,6 +1,6 @@
 #import bevy_pbr::{
     atmosphere::{
-        internal::{atmosphere, atmosphere_sampler, sample_medium, transmittance_lut},
+        internal::{atmosphere, atmosphere_sampler, sample_medium, transmittance_lut, core_settings},
         functions::{
             sample_transmittance_lut,
             multiscattering_lut_uv_to_r_mu,

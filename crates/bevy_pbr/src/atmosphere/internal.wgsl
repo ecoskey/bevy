@@ -24,7 +24,7 @@
 #import bevy_pbr::{
     mesh_view_types::Lights,
     atmosphere::{
-        types::{Atmosphere, LutBasedUniforms},
+        types::{Atmosphere, CoreSettings, LutBasedSettings, AtmosphereTransforms},
         functions::{uv_to_ndc, rayleigh_phase, henyey_greenstein_phase, sample_transmittance_lut, sample_multiscattering_lut},
         bruneton_functions::ray_intersects_ground
     }
@@ -47,7 +47,7 @@
 
 // uniform bindings 
 @group(0) @binding(2) var<uniform> core_settings: CoreSettings;
-@group(0) @binding(3) var<uniform> lut_based_uniforms: LutBasedSettings;
+@group(0) @binding(3) var<uniform> lut_based_settings: LutBasedSettings;
 @group(0) @binding(4) var<uniform> atmosphere_transforms: AtmosphereTransforms;
 @group(0) @binding(5) var<uniform> view: View;
 @group(0) @binding(6) var<uniform> lights: Lights;
@@ -123,8 +123,8 @@ fn sample_aerial_view_lut(pos_ndc: vec3<f32>) -> vec4<f32> {
     let uv = uv_to_ndc(pos_ndc.xy);
     let view_pos = view.view_from_clip * vec4(pos_ndc, 1.0); //TODO: use transform fns to get dist to camera
     let dist = length(view_pos.xyz / view_pos.w);
-    let t_max = lut_based_uniforms.settings.aerial_view_lut_max_distance;
-    let num_slices = f32(lut_based_uniforms.settings.aerial_view_lut_size.z);
+    let t_max = lut_based_settings.aerial_view_lut_max_distance;
+    let num_slices = f32(lut_based_settings.aerial_view_lut_size.z);
     // Offset the W coordinate by -0.5 over the max distance in order to 
     // align sampling position with slice boundaries, since each texel 
     // stores the integral over its entire slice
@@ -174,7 +174,7 @@ fn sample_medium(r: f32) -> MediumSample {
     // ozone doesn't contribute to scattering
     let ozone_absorption = ozone_density * atmosphere.scattering_profile.ozone_absorption;
 
-    var medium: Medium;
+    var medium: MediumSample;
     medium.rayleigh_scattering = rayleigh_scattering;
     medium.mie_scattering = mie_scattering;
     medium.extinction = rayleigh_scattering + mie_extinction + ozone_absorption;
@@ -183,7 +183,7 @@ fn sample_medium(r: f32) -> MediumSample {
 }
 
 /// evaluates L_scat, equation 3 in the paper, which gives the total single-order scattering towards the view at a single point
-fn L_scattering(medium: Medium, ray_dir_ws: vec3<f32>, local_r: f32, local_up: vec3<f32>) -> vec3<f32> {
+fn L_scattering(medium: MediumSample, ray_dir_ws: vec3<f32>, local_r: f32, local_up: vec3<f32>) -> vec3<f32> {
     var inscattering = vec3(0.0);
     for (var light_i: u32 = 0u; light_i < lights.n_directional_lights; light_i++) {
         let light = &lights.directional_lights[light_i];
