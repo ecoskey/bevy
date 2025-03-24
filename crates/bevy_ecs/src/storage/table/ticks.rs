@@ -4,10 +4,8 @@ use bevy_ptr::ThinSlicePtr;
 
 use crate::{component::Tick, storage::thin_array_ptr::ThinArrayPtr};
 
-pub const TICKS_BRANCH_FACTOR: u8 = 16;
-
 // Dense ECS tick storage.
-pub struct Ticks<const B: u8 = TICKS_BRANCH_FACTOR> {
+pub struct Ticks {
     summary: ThinArrayPtr<UnsafeCell<TickSummary>>,
     ticks: ThinArrayPtr<UnsafeCell<Tick>>,
 }
@@ -18,14 +16,16 @@ struct TickSummary {
     mask: u32,
 }
 
-impl<const B: u8> Ticks<B> {
+impl Ticks {
+    const B: u8 = 16;
+
     unsafe fn block(&self, height: u8) -> Block<B> {
         todo!()
     }
 }
 
 #[derive(Clone)]
-struct Block<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
+struct Block<'a> {
     slice: ThinSlicePtr<'a, UnsafeCell<TickSummary>>,
     height: u8,
 }
@@ -35,7 +35,7 @@ struct BlockSize {
     height: u8,
 }
 
-impl<'a, const B: u8> Block<'a, B> {
+impl<'a> Block<'a> {
     // Create a new `TicksBlock` from a thin slice
     //
     // # Safety:
@@ -50,7 +50,7 @@ impl<'a, const B: u8> Block<'a, B> {
     }
 
     pub fn len(&self) -> usize {
-        ops::geometric_series(B as usize, self.height as u32)
+        ops::geometric_series(Ticks::B as usize, self.height as u32)
     }
 
     pub fn root(&self) -> &UnsafeCell<Tick> {
@@ -73,7 +73,7 @@ impl<'a, const B: u8> Block<'a, B> {
     pub fn upper(&self) -> Self {
         //TODO: this doesn't work for power of two block sizes, weirdly enough.
         let upper_height = self.height - ops::prev_power_of_two(self.height);
-        let upper_len = ops::geometric_series(B as usize, upper_height as u32);
+        let upper_len = ops::geometric_series(Ticks::B as usize, upper_height as u32);
 
         let upper_slice = unsafe { self.slice.offset(0, upper_len) };
 
@@ -83,13 +83,13 @@ impl<'a, const B: u8> Block<'a, B> {
 
     pub unsafe fn lower(&self, index: u8) -> Self {
         debug_assert!(
-            index < B,
+            index < Ticks::B,
             "called Block::lower() with index {} >= {}",
             index,
-            B
+            Ticks::B
         );
         let lower_height = ops::prev_power_of_two(self.height);
-        let lower_len = ops::geometric_series(B as usize, lower_height as u32);
+        let lower_len = ops::geometric_series(Ticks::B as usize, lower_height as u32);
         let lower_slice = unsafe { self.slice.offset(lower_len * index as usize, lower_len) };
 
         unsafe { Block::new(lower_slice, lower_height) }
@@ -103,23 +103,23 @@ enum BlockInfo {
 }
 
 #[derive(Clone)]
-pub struct Cursor<'a, const B: u8 = TICKS_BRANCH_FACTOR> {
-    block: Block<'a, B>,
+pub struct Cursor<'a> {
+    block: Block<'a>,
     block_info: BlockInfo,
     global_height: u8,
 }
 
-impl<'a, const B: u8> Cursor<'a, B> {
+impl<'a> Cursor<'a> {
     pub fn get(&self) -> &UnsafeCell<Tick> {
         self.block.root()
     }
 
     pub fn to_child(&mut self, index: u8) -> bool {
         assert!(
-            index < B,
+            index < Ticks::B,
             "called Cursor::to_child() with index {} >= {}",
             index,
-            B
+            Ticks::B
         );
         todo!()
     }
@@ -127,7 +127,7 @@ impl<'a, const B: u8> Cursor<'a, B> {
     pub fn to_next_sibling(&mut self) -> bool {
         match self.block_info {
             BlockInfo::Upper => todo!(), //out, proceed as if lower block, down
-            BlockInfo::Lower(i) if i == B - 1 => todo!(), // out, next lower block of outside
+            BlockInfo::Lower(i) if i == Ticks::B - 1 => todo!(), // out, next lower block of outside
             BlockInfo::Lower(i) => todo!(), //next
         }
     }
