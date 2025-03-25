@@ -1,4 +1,4 @@
-use core::{cell::UnsafeCell, sync::atomic::AtomicU32};
+use core::{cell::UnsafeCell, ops::RangeInclusive, sync::atomic::AtomicU32};
 
 use bevy_ptr::ThinSlicePtr;
 
@@ -6,27 +6,25 @@ use crate::{component::Tick, storage::thin_array_ptr::ThinArrayPtr};
 
 // Dense ECS tick storage.
 pub struct Ticks {
-    summary: ThinArrayPtr<UnsafeCell<TickSummary>>,
+    summary: ThinArrayPtr<RangeInclusive<Tick>>,
     ticks: ThinArrayPtr<UnsafeCell<Tick>>,
 }
 
 struct TickSummary {
-    min: Tick,
-    max: Tick,
-    mask: u32,
+    max: AtomicU32,
 }
 
 impl Ticks {
     const B: u8 = 16;
 
-    unsafe fn block(&self, height: u8) -> Block<B> {
+    unsafe fn as_block(&self, height: u8) -> Block {
         todo!()
     }
 }
 
 #[derive(Clone)]
 struct Block<'a> {
-    slice: ThinSlicePtr<'a, UnsafeCell<TickSummary>>,
+    slice: ThinSlicePtr<'a, TickSummary>,
     height: u8,
 }
 
@@ -41,7 +39,7 @@ impl<'a> Block<'a> {
     // # Safety:
     // - `ptr` must contain a valid packed B-ary tree in van Emde Boas layout.
     // - `height` must be equal to the height of the tree in `ptr`
-    unsafe fn new(ptr: ThinSlicePtr<'a, UnsafeCell<Tick>>, height: u8) -> Self {
+    unsafe fn new(ptr: ThinSlicePtr<'a, TickSummary>, height: u8) -> Self {
         Self { slice: ptr, height }
     }
 
@@ -53,7 +51,8 @@ impl<'a> Block<'a> {
         ops::geometric_series(Ticks::B as usize, self.height as u32)
     }
 
-    pub fn root(&self) -> &UnsafeCell<Tick> {
+    pub fn root(&self) -> &TickSummary {
+        //SAFETY: there is at least one element in this block
         unsafe { self.slice.get(0) }
     }
 
@@ -145,7 +144,7 @@ mod ops {
     /// Returns the greatest power of two less than or equal to `self`, or 0 otherwise.
     pub const fn prev_power_of_two(n: u8) -> u8 {
         // n = 0 gives highest_bit_set_idx = 0.
-        let highest_bit_set_idx = 7 - (n | 1).leading_zeros();
+        let highest_bit_set_idx = 7 - (n | 1).leading_zeroes();
         // Binary AND of highest bit with n is a no-op, except zero gets wiped.
         (1 << highest_bit_set_idx) & n
     }
