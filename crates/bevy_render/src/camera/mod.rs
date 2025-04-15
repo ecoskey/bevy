@@ -24,7 +24,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Camera>()
             .register_type::<ClearColor>()
-            .register_type::<CameraRenderGraph>()
+            .register_type::<RenderGraphDriver>()
             .register_type::<CameraMainTextureUsages>()
             .register_type::<Exposure>()
             .register_type::<TemporalJitter>()

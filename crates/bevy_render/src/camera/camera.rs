@@ -335,6 +335,7 @@ pub enum ViewportConversionError {
 #[reflect(Component, Default, Debug, Clone)]
 #[component(on_add = warn_on_no_render_graph)]
 #[require(
+    View,
     Frustum,
     CameraMainTextureUsages,
     VisibleEntities,
@@ -344,8 +345,6 @@ pub enum ViewportConversionError {
     SyncToRenderWorld
 )]
 pub struct Camera {
-    /// If set, this camera will render to the given [`Viewport`] rectangle within the configured [`RenderTarget`].
-    pub viewport: Option<Viewport>,
     /// Cameras with a higher order are rendered later, and thus on top of lower order cameras.
     pub order: isize,
     /// If this is set to `true`, this camera will be rendered to its specified [`RenderTarget`]. If `false`, this
@@ -354,29 +353,21 @@ pub struct Camera {
     /// Computed values for this camera, such as the projection matrix and the render target size.
     #[reflect(ignore, clone)]
     pub computed: ComputedCameraValues,
-    /// The "target" that this camera will render to.
-    pub target: RenderTarget,
     /// If this is set to `true`, the camera will use an intermediate "high dynamic range" render texture.
     /// This allows rendering with a wider range of lighting values.
     pub hdr: bool,
-    // todo: reflect this when #6042 lands
-    /// The [`CameraOutputMode`] for this camera.
-    #[reflect(ignore, clone)]
-    pub output_mode: CameraOutputMode,
     /// If this is enabled, a previous camera exists that shares this camera's render target, and this camera has MSAA enabled, then the previous camera's
     /// outputs will be written to the intermediate multi-sampled render target textures for this camera. This enables cameras with MSAA enabled to
     /// "write their results on top" of previous camera results, and include them as a part of their render results. This is enabled by default to ensure
     /// cameras with MSAA enabled layer their results in the same way as cameras without MSAA enabled by default.
     pub msaa_writeback: bool,
-    /// The clear color operation to perform on the render target.
-    pub clear_color: ClearColorConfig,
     /// If set, this camera will be a sub camera of a large view, defined by a [`SubCameraView`].
     pub sub_camera_view: Option<SubCameraView>,
 }
 
 fn warn_on_no_render_graph(world: DeferredWorld, HookContext { entity, caller, .. }: HookContext) {
-    if !world.entity(entity).contains::<CameraRenderGraph>() {
-        warn!("{}Entity {entity} has a `Camera` component, but it doesn't have a render graph configured. Consider adding a `Camera2d` or `Camera3d` component, or manually adding a `CameraRenderGraph` component if you need a custom render graph.", caller.map(|location|format!("{location}: ")).unwrap_or_default());
+    if !world.entity(entity).contains::<RenderGraphDriver>() {
+        warn!("{}Entity {entity} has a `Camera` component, but it doesn't have a render graph configured. Consider adding a `Camera2d` or `Camera3d` component, or manually adding a `RenderGraphDriver` component if you need a custom render graph.", caller.map(|location|format!("{location}: ")).unwrap_or_default());
     }
 }
 
@@ -385,13 +376,9 @@ impl Default for Camera {
         Self {
             is_active: true,
             order: 0,
-            viewport: None,
             computed: Default::default(),
-            target: Default::default(),
-            output_mode: Default::default(),
             hdr: false,
             msaa_writeback: true,
-            clear_color: Default::default(),
             sub_camera_view: None,
         }
     }
@@ -719,6 +706,31 @@ impl Camera {
     }
 }
 
+#[derive(Component, Debug, Reflect, Clone)]
+pub struct View {
+    /// The "target" that this view will render to.
+    pub target: RenderTarget,
+    /// If set, this camera will render to the given [`Viewport`] rectangle within the configured [`RenderTarget`].
+    pub viewport: Option<Viewport>,
+    // todo: reflect this when #6042 lands
+    /// The [`CameraOutputMode`] for this camera.
+    #[reflect(ignore, clone)]
+    pub output_mode: CameraOutputMode,
+    /// The clear color operation to perform on the render target.
+    pub clear_color: ClearColorConfig,
+}
+
+impl Default for View {
+    fn default() -> Self {
+        Self {
+            target: Default::default(),
+            viewport: None,
+            output_mode: Default::default(),
+            clear_color: Default::default(),
+        }
+    }
+}
+
 /// Control how this camera outputs once rendering is completed.
 #[derive(Debug, Clone, Copy)]
 pub enum CameraOutputMode {
@@ -747,13 +759,13 @@ impl Default for CameraOutputMode {
     }
 }
 
-/// Configures the [`RenderGraph`](crate::render_graph::RenderGraph) name assigned to be run for a given [`Camera`] entity.
+/// Configures the [`RenderGraph`](crate::render_graph::RenderGraph) name assigned to be run for a given entity.
 #[derive(Component, Debug, Deref, DerefMut, Reflect, Clone)]
 #[reflect(opaque)]
 #[reflect(Component, Debug, Clone)]
-pub struct CameraRenderGraph(InternedRenderSubGraph);
+pub struct RenderGraphDriver(InternedRenderSubGraph);
 
-impl CameraRenderGraph {
+impl RenderGraphDriver {
     /// Creates a new [`CameraRenderGraph`] from any string-like type.
     #[inline]
     pub fn new<T: RenderSubGraph>(name: T) -> Self {
@@ -1097,7 +1109,7 @@ pub fn extract_cameras(
             Entity,
             RenderEntity,
             &Camera,
-            &CameraRenderGraph,
+            &RenderGraphDriver,
             &GlobalTransform,
             &VisibleEntities,
             &Frustum,
