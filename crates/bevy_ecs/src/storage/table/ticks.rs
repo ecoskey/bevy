@@ -1,7 +1,5 @@
-use core::{cell::UnsafeCell, marker::PhantomData, ptr::NonNull, sync::atomic::AtomicBool};
-use std::sync::{RwLock, RwLockWriteGuard};
-
-use bevy_ptr::ThinSlicePtr;
+use core::{cell::UnsafeCell, marker::PhantomData, ptr::NonNull};
+use std::sync::RwLock;
 
 use crate::{component::Tick, storage::thin_array_ptr::ThinArrayPtr};
 
@@ -14,16 +12,24 @@ pub struct Ticks {
     ticks: ThinArrayPtr<UnsafeCell<Tick>>,
 }
 
+impl Ticks {}
+
 pub struct TickSummary {
     max: Tick,
 }
 
+#[derive(Copy, Clone)]
 pub struct TickSummaryCursor<'a> {
     ptr: NonNull<RwLock<TickSummary>>,
     index: u32,
     len: u32,
-    _data: PhantomData<&'a [TickSummary]>,
+    _data: PhantomData<&'a [RwLock<TickSummary>]>,
 }
+
+// SAFETY: TickSummaryCursor borrows Ticks.summary by reference, so there is no unsafe aliasing
+unsafe impl<'a> Send for TickSummaryCursor<'a> {}
+// SAFETY: TickSummaryCursor borrows Ticks.summary by reference, so there is no unsafe aliasing
+unsafe impl<'a> Sync for TickSummaryCursor<'a> {}
 
 impl<'a> TickSummaryCursor<'a> {
     pub fn get(&self) -> &RwLock<TickSummary> {
@@ -31,44 +37,78 @@ impl<'a> TickSummaryCursor<'a> {
         unsafe { self.ptr.as_ref() }
     }
 
-    pub fn to_update_parent(&mut self) -> bool {
-        let offset = ops::lsb(self.index as i32);
-        let new_index = self.index as i32 + offset;
-        if (new_index >= self.len) {
-            return false;
-        }
-        unsafe {
-            self.ptr.offset(offset as isize);
-        }
+    fn get_at_offset_right(self, offset: u32) -> Option<Self> {
+        let mut new_cursor = self;
+        let in_bounds = new_cursor.len - new_cursor.index < offset;
+        in_bounds.then(|| {
+            // SAFETY: new_index is in bounds
+            unsafe { new_cursor.ptr.offset(offset as isize) };
+            new_cursor.index += offset;
+            new_cursor
+        })
+    }
 
-        self.index = new_index;
-        true
+    fn get_at_offset_left(self, offset: u32) -> Option<Self> {
+        let mut new_cursor = self;
+        let in_bounds = new_cursor.index >= offset;
+        in_bounds.then(|| {
+            // SAFETY: new_index is in bounds
+            unsafe { new_cursor.ptr.offset(-(offset as isize)) };
+            new_cursor.index -= offset;
+            new_cursor
+        })
+    }
+
+    pub fn update(&mut self, other: &TickSummary, this_run: Tick) {
+        let mut summary = self.get().write().unwrap(); //TODO: not unwrap
+        if other.max.is_newer_than(summary.max, this_run) {
+            summary.max = other.max;
+        }
+    }
+
+    pub fn get_update_parent(self) -> Option<Self> {
+        let offset = ops::lsb(self.index);
+        self.get_at_offset_right(offset)
+    }
+
+    pub fn get_search_children(self) -> Option<(Self, Self)> {
+        let offset = ops::lsb(self.index) / 2;
+        let left = self.get_at_offset_left(offset);
+        let right = self.get_at_offset_right(offset);
+        left.zip(right)
     }
 }
 
-pub struct TickSummaryGuard<'a> {
-    leaf: TickSummaryCursor<'a>,
-    summary: TickSummary,
-    changed: bool,
-}
-
-impl<'a> Drop for TickSummaryGuard<'a> {
-    fn drop(&mut self) {
-        if !self.changed {
-            return;
-        }
-
-        // propagate summary changes upwards
-    }
-}
-
-pub struct TicksSlice<'a> {
-    summary: TickSummaryGuard<'a>,
+pub struct TicksSliceMut<'a> {
+    summary: TickSummaryCursor<'a>,
+    scratch: TickSummary,
+    dirty: bool,
     ticks: &'a mut [Tick],
 }
 
+impl<'a> TicksSliceMut<'a> {
+    pub fn drop(mut self, this_run: Tick) {
+        if !self.dirty {
+            return;
+        }
+
+        loop {
+            self.summary.update(&self.scratch, this_run);
+            if let Some(parent) = self.summary.get_update_parent() {
+                self.summary = parent;
+            }
+        }
+    }
+}
+
+impl<'a> Drop for TicksSliceMut<'a> {
+    fn drop(&mut self) {
+        panic!("TicksSliceMut dropped without explicit call to `drop`!");
+    }
+}
+
 mod ops {
-    pub fn lsb(n: i32) -> i32 {
-        n & (-n)
+    pub fn lsb(n: u32) -> u32 {
+        n & (!n).wrapping_add(1)
     }
 }
