@@ -2,7 +2,7 @@ use core::borrow::Borrow;
 
 use bevy_ecs::{component::Component, entity::EntityHashMap, reflect::ReflectComponent};
 use bevy_math::{
-    Affine3A, CompassOctant, Mat3A, Mat4, URect, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
+    Affine3A, CompassOctant, Mat3A, Mat4, Rect, URect, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
 };
 use bevy_reflect::prelude::*;
 

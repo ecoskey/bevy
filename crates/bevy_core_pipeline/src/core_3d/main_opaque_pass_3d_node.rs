@@ -10,7 +10,7 @@ use bevy_render::{
     render_phase::{TrackedRenderPass, ViewBinnedRenderPhases},
     render_resource::{CommandEncoderDescriptor, PipelineCache, RenderPassDescriptor, StoreOp},
     renderer::RenderContext,
-    view::{ExtractedView, ViewDepthTexture, ViewTarget, ViewUniformOffset},
+    view::{ExtractedView, ExtractedViewTarget, ViewDepthTexture, ViewUniformOffset},
 };
 use tracing::error;
 #[cfg(feature = "trace")]
@@ -26,7 +26,7 @@ impl ViewNode for MainOpaquePass3dNode {
     type ViewQuery = (
         &'static ExtractedCamera,
         &'static ExtractedView,
-        &'static ViewTarget,
+        &'static ExtractedViewTarget,
         &'static ViewDepthTexture,
         Option<&'static SkyboxPipelineId>,
         Option<&'static SkyboxBindGroup>,
