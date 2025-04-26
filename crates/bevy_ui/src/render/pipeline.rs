@@ -6,7 +6,7 @@ use bevy_render::{
         *,
     },
     renderer::RenderDevice,
-    view::{ViewTarget, ViewUniform},
+    view::{ExtractedViewTarget, ViewUniform},
 };
 
 #[derive(Resource)]
@@ -95,7 +95,7 @@ impl SpecializedRenderPipeline for UiPipeline {
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: if key.hdr {
-                        ViewTarget::TEXTURE_FORMAT_HDR
+                        ExtractedViewTarget::TEXTURE_FORMAT_HDR
                     } else {
                         TextureFormat::bevy_default()
                     },
