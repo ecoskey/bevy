@@ -1,26 +1,38 @@
 use crate::{
     camera::{ClearColor, ExtractedCamera, NormalizedRenderTarget, SortedCameras},
-    render_graph::{Node, NodeRunError, RenderGraphContext},
+    render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, RenderSubGraph},
     renderer::RenderContext,
     view::ExtractedWindows,
 };
-use bevy_ecs::{entity::ContainsEntity, prelude::QueryState, world::World};
+use bevy_ecs::{
+    entity::ContainsEntity, prelude::QueryState, system::lifetimeless::Read, world::World,
+};
 use bevy_platform::collections::HashSet;
 use wgpu::{LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp};
 
-pub struct CameraDriverNode {
-    cameras: QueryState<&'static ExtractedCamera>,
+use super::{CompositedBy, Compositor};
+
+#[derive(RenderSubGraph)]
+pub struct DefaultCompositorGraph;
+
+#[derive(RenderLabel)]
+pub struct RenderViews;
+
+pub struct RenderViewsNode {
+    compositors: QueryState<(Read<Compositor>, Read<CompositedBy>)>,
+    cameras: QueryState<Read<ExtractedCamera>>,
 }
 
-impl CameraDriverNode {
+impl RenderViewsNode {
     pub fn new(world: &mut World) -> Self {
         Self {
+            compositors: world.query(),
             cameras: world.query(),
         }
     }
 }
 
-impl Node for CameraDriverNode {
+impl Node for RenderViewsNode {
     fn update(&mut self, world: &mut World) {
         self.cameras.update_archetypes(world);
     }

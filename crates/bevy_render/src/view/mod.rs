@@ -598,7 +598,7 @@ pub struct ViewUniformOffset {
 }
 
 #[derive(Component)]
-pub struct ViewTarget {
+pub struct ExtractedViewTarget {
     main_textures: MainTargetTextures,
     main_texture_format: TextureFormat,
     /// 0 represents `main_textures.a`, 1 represents `main_textures.b`
@@ -720,7 +720,7 @@ pub struct NoIndirectDrawing;
 #[derive(Component, Default)]
 pub struct NoCpuCulling;
 
-impl ViewTarget {
+impl ExtractedViewTarget {
     pub const TEXTURE_FORMAT_HDR: TextureFormat = TextureFormat::Rgba16Float;
 
     /// Retrieve this target's main texture's color attachment.
@@ -813,7 +813,7 @@ impl ViewTarget {
     /// Returns `true` if and only if the main texture is [`Self::TEXTURE_FORMAT_HDR`]
     #[inline]
     pub fn is_hdr(&self) -> bool {
-        self.main_texture_format == ViewTarget::TEXTURE_FORMAT_HDR
+        self.main_texture_format == ExtractedViewTarget::TEXTURE_FORMAT_HDR
     }
 
     /// The final texture this view will render to.
@@ -1041,7 +1041,7 @@ pub fn prepare_view_targets(
         };
 
         let main_texture_format = if view.hdr {
-            ViewTarget::TEXTURE_FORMAT_HDR
+            ExtractedViewTarget::TEXTURE_FORMAT_HDR
         } else {
             TextureFormat::bevy_default()
         };
@@ -1113,7 +1113,7 @@ pub fn prepare_view_targets(
             main_texture: main_texture.clone(),
         };
 
-        commands.entity(entity).insert(ViewTarget {
+        commands.entity(entity).insert(ExtractedViewTarget {
             main_texture: main_textures.main_texture.clone(),
             main_textures,
             main_texture_format,

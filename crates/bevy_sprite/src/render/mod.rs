@@ -34,7 +34,7 @@ use bevy_render::{
     sync_world::RenderEntity,
     texture::{DefaultImageSampler, FallbackImage, GpuImage},
     view::{
-        ExtractedView, Msaa, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+        ExtractedView, ExtractedViewTarget, Msaa, ViewUniform, ViewUniformOffset, ViewUniforms,
         ViewVisibility,
     },
     Extract,
@@ -224,7 +224,7 @@ impl SpecializedRenderPipeline for SpritePipeline {
         }
 
         let format = match key.contains(SpritePipelineKey::HDR) {
-            true => ViewTarget::TEXTURE_FORMAT_HDR,
+            true => ExtractedViewTarget::TEXTURE_FORMAT_HDR,
             false => TextureFormat::bevy_default(),
         };
 
