@@ -6,7 +6,7 @@
 //! |:-------------|:---------------------|
 //! | Space        | Trigger screen shake |
 
-use bevy::{prelude::*, render::camera::SubCameraView, sprite::MeshMaterial2d};
+use bevy::{prelude::*, render::camera::SubView, sprite::MeshMaterial2d};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -78,7 +78,7 @@ fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(1000, 700),
                 offset: Vec2::new(0.0, 0.0),
                 size: UVec2::new(1000, 700),

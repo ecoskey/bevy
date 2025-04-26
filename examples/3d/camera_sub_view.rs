@@ -8,7 +8,7 @@
 //! - Rapidly change the sub view offset to get a screen shake effect
 use bevy::{
     prelude::*,
-    render::camera::{ScalingMode, SubCameraView, Viewport},
+    render::camera::{ScalingMode, SubView, Viewport},
 };
 
 fn main() {
@@ -73,7 +73,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 // The values of `full_size` and `size` do not have to be the
                 // exact values of your physical viewport. The important part is
                 // the ratio between them.
@@ -100,7 +100,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(500, 500),
                 offset: Vec2::ZERO,
                 size: UVec2::new(100, 100),
@@ -123,7 +123,7 @@ fn setup(
     commands.spawn((
         Camera3d::default(),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(800, 800),
                 offset: Vec2::ZERO,
                 size: UVec2::new(800, 400),
@@ -169,7 +169,7 @@ fn setup(
             ..OrthographicProjection::default_3d()
         }),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(2, 2),
                 offset: Vec2::ZERO,
                 size: UVec2::new(1, 2),
@@ -197,7 +197,7 @@ fn setup(
             ..OrthographicProjection::default_3d()
         }),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(500, 500),
                 offset: Vec2::ZERO,
                 size: UVec2::new(100, 100),
@@ -226,7 +226,7 @@ fn setup(
             ..OrthographicProjection::default_3d()
         }),
         Camera {
-            sub_camera_view: Some(SubCameraView {
+            sub_camera_view: Some(SubView {
                 full_size: UVec2::new(200, 200),
                 offset: Vec2::ZERO,
                 size: UVec2::new(200, 100),
