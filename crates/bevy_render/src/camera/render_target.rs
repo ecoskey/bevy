@@ -1,5 +1,9 @@
 use bevy_asset::{AssetId, Assets, Handle};
-use bevy_ecs::{component::Component, entity::Entity};
+use bevy_ecs::{
+    component::{Component, HookContext},
+    entity::Entity,
+    world::DeferredWorld,
+};
 use bevy_image::Image;
 use bevy_math::{FloatOrd, UVec2};
 use bevy_platform::collections::HashSet;
@@ -27,10 +31,12 @@ pub struct RenderTargetInfo {
     pub scale_factor: f32,
 }
 
+
+
 /// The "target" that a [`Camera`] will render to. For example, this could be a [`Window`]
 /// swapchain or an [`Image`].
 #[derive(Component, Debug, Clone, Reflect, From)]
-#[component(immutable)]
+#[component(immutable, on_insert = Self::on_insert, on_remove = Self::on_remove)]
 #[reflect(Clone)]
 pub enum RenderTarget {
     /// Window to which the camera's view is rendered.
@@ -40,6 +46,14 @@ pub enum RenderTarget {
     /// Texture View to which the camera's view is rendered.
     /// Useful when the texture view needs to be created outside of Bevy, for example OpenXR.
     TextureView(ManualTextureViewHandle),
+}
+
+impl RenderTarget {
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+        world.
+    }
+
+    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {}
 }
 
 /// A render target that renders to an [`Image`].

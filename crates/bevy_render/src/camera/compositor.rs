@@ -1,32 +1,73 @@
 use bevy_ecs::{
     component::{Component, HookContext},
-    entity::Entity,
+    entity::{ContainsEntity, Entity},
     event::Event,
+    observer::Trigger,
+    query::Has,
+    system::Query,
     world::DeferredWorld,
 };
 use bevy_math::{Rect, URect, UVec2, Vec2};
+use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use tracing::warn;
 
-use crate::sync_world::SyncToRenderWorld;
+use crate::{render_graph::RenderSubGraph, sync_world::SyncToRenderWorld};
 
 use super::{RenderGraphDriver, RenderTarget, RenderTargetInfo, Viewport};
 
-#[derive(Component, Default)]
-#[require(RenderTarget, CompositedViews)]
-pub struct Compositor;
+// -----------------------------------------------------------------------------
+// Core Compositor Types
 
-#[derive(Event)]
-pub struct RefreshCompositorLayout;
+#[derive(Component, Default)]
+#[require(
+    RenderTarget,
+    CompositedViews,
+    RenderGraphDriver::new(SimpleCompositorGraph)
+)]
+pub struct Compositor {
+    views: Vec<Entity>,
+    invalid: bool,
+}
 
 #[derive(Component)]
 #[relationship(relationship_target = CompositedViews)]
-#[require(View)]
 pub struct CompositedBy(pub Entity);
+
+impl ContainsEntity for CompositedBy {
+    fn entity(&self) -> Entity {
+        self.0
+    }
+}
 
 #[derive(Component, Default)]
 #[relationship_target(relationship = CompositedBy)]
-#[require(Compositor)]
 pub struct CompositedViews(Vec<Entity>);
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, RenderSubGraph)]
+pub struct SimpleCompositorGraph;
+
+// -----------------------------------------------------------------------------
+// Compositor Events
+
+#[derive(Event)]
+#[event(auto_propagate, traversal = &'static CompositedBy)]
+pub enum CompositorEvent {
+    ViewDisabled,
+    ViewEnabled,
+    RenderTargetChanged,
+    SubViewChanged,
+    RefreshAll,
+}
+
+fn handle_compositor_events(
+    ev: Trigger<CompositorEvent>,
+    compositors: Query<(&mut Compositor, &CompositedViews, &RenderTarget)>,
+    views: Query<(&View, &SubView, &mut ViewTarget)>,
+) {
+}
+
+// -----------------------------------------------------------------------------
+// Views
 
 #[derive(Component, Default)]
 #[component(immutable, on_insert = Self::on_insert, on_remove = Self::on_remove)]
@@ -43,33 +84,87 @@ impl View {
     }
 
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        try_refresh_layout(&mut world, &ctx).inspect_err(|()| warn!(
-            concat!(
-                "{}Entity {} has a View component, but it doesn't have a compositor configured.",
-                "Consider adding a `CompositedBy` component that points to an entity with a Compositor."
-            ),
-            ctx.caller.map(|location| format!("{location}: ")).unwrap_or_default(), ctx.entity,
-        ));
+        let (view, is_composited) = world
+            .entity(ctx.entity)
+            .get_components::<(&View, Has<CompositedBy>)>()
+            .unwrap();
+
+        let ev = match view {
+            View::Disabled => CompositorEvent::ViewDisabled,
+            View::Enabled => CompositorEvent::ViewEnabled,
+        };
+
+        world.trigger_targets(ev, ctx.entity);
+
+        if !is_composited {
+            warn!(
+                concat!(
+                    "{}Entity {} has a View component, but it doesn't have a compositor configured.",
+                    "Consider adding a `CompositedBy` component that points to an entity with a Compositor."
+                ),
+                ctx.caller.map(|location| format!("{location}: ")).unwrap_or_default(), ctx.entity,
+            );
+        }
     }
 
-    fn on_remove(world: DeferredWorld, ctx: HookContext) {
-        if world
-            .get::<CompositedBy>(ctx.entity)
-            .and_then(|compositor| world.get::<Compositor>(compositor.0))
-            .is_some()
-        {
-            //parent exists and has compositor -> send reeval event
-        }
+    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
+        world.trigger_targets(CompositorEvent::ViewDisabled, ctx.entity);
     }
 }
 
-fn try_refresh_layout(mut world: &mut DeferredWorld, ctx: &HookContext) -> Result<Entity, ()> {
-    match world.get::<CompositedBy>(ctx.entity) {
-        Some(CompositedBy(compositor)) => {
-            world.trigger_targets(RefreshCompositorLayout, *compositor);
-            Ok(*compositor)
+/// Settings to define a camera sub view.
+///
+/// When [`Camera::sub_camera_view`] is `Some`, only the sub-section of the
+/// image defined by `size` and `offset` (relative to the `full_size` of the
+/// whole image) is projected to the cameras viewport.
+///
+/// Take the example of the following multi-monitor setup:
+/// ```css
+/// ┌───┬───┐
+/// │ A │ B │
+/// ├───┼───┤
+/// │ C │ D │
+/// └───┴───┘
+/// ```
+/// If each monitor is 1920x1080, the whole image will have a resolution of
+/// 3840x2160. For each monitor we can use a single camera with a viewport of
+/// the same size as the monitor it corresponds to. To ensure that the image is
+/// cohesive, we can use a different sub view on each camera:
+/// - Camera A: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,0
+/// - Camera B: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 1920,0
+/// - Camera C: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,1080
+/// - Camera D: `full_size` = 3840x2160, `size` = 1920x1080, `offset` =
+///   1920,1080
+///
+/// However since only the ratio between the values is important, they could all
+/// be divided by 120 and still produce the same image. Camera D would for
+/// example have the following values:
+/// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
+#[derive(Debug, Component, Clone, Copy, Reflect, PartialEq)]
+#[component(immutable, on_insert = Self::on_insert)]
+#[reflect(Clone, PartialEq, Default)]
+pub struct SubView {
+    /// Size of the entire camera view
+    pub full_size: UVec2,
+    /// Offset of the sub camera
+    pub offset: Vec2,
+    /// Size of the sub camera
+    pub size: UVec2,
+}
+
+impl SubView {
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+        world.trigger_targets(CompositorEvent::SubViewChanged, ctx.entity);
+    }
+}
+
+impl Default for SubView {
+    fn default() -> Self {
+        Self {
+            full_size: UVec2::new(1, 1),
+            offset: Vec2::new(0., 0.),
+            size: UVec2::new(1, 1),
         }
-        None => Err(()),
     }
 }
 
@@ -80,6 +175,7 @@ pub struct ViewTarget {
     viewport: Option<Viewport>,
 }
 
+//TODO: UPDATE METHOD DOCS
 impl ViewTarget {
     #[inline]
     pub fn target(&self) -> &RenderTarget {
@@ -132,16 +228,9 @@ impl ViewTarget {
     /// The logical size of this camera's viewport. If the `viewport` field is set to [`Some`], this
     /// will be the size of that custom viewport. Otherwise it will default to the full logical size
     /// of the current [`RenderTarget`].
-    ///  For logic that requires the full logical size of the
-    /// [`RenderTarget`], prefer [`Camera::logical_target_size`].
     ///
-    /// Returns `None` if either:
-    /// - the function is called just after the `Camera` is created, before `camera_system` is executed,
-    /// - the [`RenderTarget`] isn't correctly set:
-    ///   - it references the [`PrimaryWindow`](RenderTarget::Window) when there is none,
-    ///   - it references a [`Window`](RenderTarget::Window) entity that doesn't exist or doesn't actually have a `Window` component,
-    ///   - it references an [`Image`](RenderTarget::Image) that doesn't exist (invalid handle),
-    ///   - it references a [`TextureView`](RenderTarget::TextureView) that doesn't exist (invalid handle).
+    /// For logic that requires the full logical size of the
+    /// [`RenderTarget`], prefer [`Camera::logical_target_size`].
     #[inline]
     pub fn logical_viewport_size(&self) -> Vec2 {
         self.viewport

@@ -4,7 +4,7 @@
 )]
 use super::{
     compositor::{View, ViewTarget},
-    ClearColorConfig, Projection,
+    try_refresh_layout, ClearColorConfig, Projection,
 };
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
@@ -21,7 +21,7 @@ use crate::{
 use bevy_asset::{AssetEvent, AssetId, Assets};
 use bevy_ecs::{
     change_detection::DetectChanges,
-    component::Component,
+    component::{Component, HookContext},
     entity::Entity,
     event::EventReader,
     prelude::With,
@@ -29,6 +29,7 @@ use bevy_ecs::{
     reflect::ReflectComponent,
     relationship::RelationshipSourceCollection,
     system::{Commands, Query, Res, ResMut},
+    world::DeferredWorld,
 };
 use bevy_image::Image;
 use bevy_math::{ops, vec2, Dir3, Mat4, Ray3d, URect, UVec2, UVec4, Vec2, Vec3};
@@ -134,9 +135,10 @@ impl Viewport {
 /// be divided by 120 and still produce the same image. Camera D would for
 /// example have the following values:
 /// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
-#[derive(Debug, Clone, Copy, Reflect, PartialEq)]
+#[derive(Debug, Component, Clone, Copy, Reflect, PartialEq)]
+#[component(immutable, on_insert = Self::on_insert)]
 #[reflect(Clone, PartialEq, Default)]
-pub struct SubCameraView {
+pub struct SubView {
     /// Size of the entire camera view
     pub full_size: UVec2,
     /// Offset of the sub camera
@@ -145,7 +147,13 @@ pub struct SubCameraView {
     pub size: UVec2,
 }
 
-impl Default for SubCameraView {
+impl SubView {
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+        try_refresh_layout(&mut world, &ctx);
+    }
+}
+
+impl Default for SubView {
     fn default() -> Self {
         Self {
             full_size: UVec2::new(1, 1),
@@ -154,6 +162,7 @@ impl Default for SubCameraView {
         }
     }
 }
+
 /// Holds internally computed [`Camera`] values.
 #[derive(Default, Debug, Clone)]
 pub struct ComputedCameraValues {
