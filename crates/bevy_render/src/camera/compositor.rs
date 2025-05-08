@@ -6,12 +6,12 @@ use bevy_ecs::{
     event::Event,
     observer::Trigger,
     query::Has,
+    reflect::ReflectComponent,
     system::{Commands, Query},
     world::DeferredWorld,
 };
 use bevy_math::{Rect, URect, UVec2, Vec2};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
-use tracing::warn;
 
 use crate::{render_graph::RenderSubGraph, sync_world::SyncToRenderWorld};
 
@@ -26,7 +26,8 @@ use super::{
 #[require(
     RenderTarget,
     CompositedViews,
-    RenderGraphDriver::new(SimpleCompositorGraph)
+    RenderGraphDriver::new(SimpleCompositorGraph),
+    SyncToRenderWorld
 )]
 pub struct Compositor {
     views: Vec<Entity>,
@@ -70,7 +71,10 @@ fn handle_compositor_events(
     mut commands: Commands,
 ) {
     match trigger.event() {
-        CompositorEvent::ViewDisabled => {}
+        CompositorEvent::ViewDisabled => {
+            compositors.get_mut(trigger.target)
+            commands.entity()
+        }
         CompositorEvent::ViewEnabled => {}
         CompositorEvent::RenderTargetChanged => todo!(),
         CompositorEvent::SubViewChanged => todo!(),

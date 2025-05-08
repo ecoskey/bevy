@@ -12,10 +12,10 @@ use wgpu::{LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, 
 
 use super::{CompositedBy, Compositor};
 
-#[derive(RenderSubGraph)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderSubGraph)]
 pub struct DefaultCompositorGraph;
 
-#[derive(RenderLabel)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderLabel)]
 pub struct RenderViews;
 
 pub struct RenderViewsNode {
