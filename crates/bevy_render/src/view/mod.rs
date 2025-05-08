@@ -35,7 +35,6 @@ use bevy_math::{mat3, vec2, vec3, Mat3, Mat4, UVec2, UVec4, Vec2, Vec3, Vec4, Ve
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use bevy_render_macros::ExtractComponent;
 use bevy_transform::components::GlobalTransform;
-use bevy_utils::{hashbrown::hash_map::Entry, HashMap};
 use core::{
     ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
