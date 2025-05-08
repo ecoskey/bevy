@@ -4,7 +4,7 @@
 )]
 use super::{
     compositor::{View, ViewTarget},
-    try_refresh_layout, ClearColorConfig, Projection,
+    ClearColorConfig, CompositorEvent, Projection,
 };
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
@@ -149,7 +149,7 @@ pub struct SubView {
 
 impl SubView {
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        try_refresh_layout(&mut world, &ctx);
+        world.trigger_targets(CompositorEvent::SubViewChanged, ctx.entity);
     }
 }
 
