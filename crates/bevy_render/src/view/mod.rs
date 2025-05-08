@@ -14,6 +14,7 @@ use crate::{
     prelude::Shader,
     primitives::Frustum,
     render_asset::RenderAssets,
+    render_graph::InternedRenderSubGraph,
     render_phase::ViewRangefinder3d,
     render_resource::{DynamicUniformBuffer, ShaderType, Texture, TextureView},
     renderer::{RenderDevice, RenderQueue},
@@ -30,7 +31,7 @@ use bevy_color::LinearRgba;
 use bevy_derive::{Deref, DerefMut};
 use bevy_ecs::prelude::*;
 use bevy_image::BevyDefault as _;
-use bevy_math::{mat3, vec2, vec3, Mat3, Mat4, UVec4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use bevy_math::{mat3, vec2, vec3, Mat3, Mat4, UVec2, UVec4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use bevy_render_macros::ExtractComponent;
 use bevy_transform::components::GlobalTransform;
@@ -248,45 +249,13 @@ impl RetainedViewEntity {
 pub struct ExtractedView {
     /// The entity in the main world corresponding to this render world view.
     pub retained_view_entity: RetainedViewEntity,
-    /// Typically a right-handed projection matrix, one of either:
-    ///
-    /// Perspective (infinite reverse z)
-    /// ```text
-    /// f = 1 / tan(fov_y_radians / 2)
-    ///
-    /// ⎡ f / aspect  0     0   0 ⎤
-    /// ⎢          0  f     0   0 ⎥
-    /// ⎢          0  0     0  -1 ⎥
-    /// ⎣          0  0  near   0 ⎦
-    /// ```
-    ///
-    /// Orthographic
-    /// ```text
-    /// w = right - left
-    /// h = top - bottom
-    /// d = near - far
-    /// cw = -right - left
-    /// ch = -top - bottom
-    ///
-    /// ⎡  2 / w       0         0  0 ⎤
-    /// ⎢      0   2 / h         0  0 ⎥
-    /// ⎢      0       0     1 / d  0 ⎥
-    /// ⎣ cw / w  ch / h  near / d  1 ⎦
-    /// ```
-    ///
-    /// `clip_from_view[3][3] == 1.0` is the standard way to check if a projection is orthographic
-    ///
-    /// Custom projections are also possible however.
-    pub clip_from_view: Mat4,
-    pub world_from_view: GlobalTransform,
-    // The view-projection matrix. When provided it is used instead of deriving it from
-    // `projection` and `transform` fields, which can be helpful in cases where numerical
-    // stability matters and there is a more direct way to derive the view-projection matrix.
-    pub clip_from_world: Option<Mat4>,
-    pub hdr: bool,
+    /// The render target entity associated with this View
+    pub target: Option<NormalizedRenderTarget>,
+    pub physical_viewport_size: Option<UVec2>,
+    pub physical_target_size: Option<UVec2>,
     // uvec4(origin.x, origin.y, width, height)
-    pub viewport: UVec4,
-    pub color_grading: ColorGrading,
+    pub viewport: Option<UVec4>,
+    pub render_graph: InternedRenderSubGraph,
 }
 
 impl ExtractedView {

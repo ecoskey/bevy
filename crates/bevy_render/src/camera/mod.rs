@@ -5,6 +5,7 @@ mod manual_texture_view;
 mod projection;
 mod render;
 mod render_target;
+mod view;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_reflect::Reflect;
@@ -16,12 +17,13 @@ pub use projection::*;
 pub use render::*;
 pub use render_target::*;
 use tracing::warn;
+pub use view::*;
 
 use crate::{
     extract_component::ExtractComponentPlugin,
     extract_resource::ExtractResourcePlugin,
     render_graph::{InternedRenderSubGraph, RenderGraph, RenderSubGraph},
-    ExtractSchedule, Render, RenderApp, RenderSet,
+    ExtractSchedule, Render, RenderApp, RenderSystems,
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{

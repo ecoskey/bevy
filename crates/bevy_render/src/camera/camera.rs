@@ -2,10 +2,7 @@
     clippy::module_inception,
     reason = "The parent module contains all things viewport-related, while this module handles cameras as a component. However, a rename/refactor which should clear up this lint is being discussed; see #17196."
 )]
-use super::{
-    compositor::{View, ViewTarget},
-    ClearColorConfig, CompositorEvent, Projection,
-};
+use super::{ClearColorConfig, Projection, View, ViewTarget};
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
     camera::ManualTextureViews,
@@ -13,15 +10,15 @@ use crate::{
     render_graph::InternedRenderSubGraph,
     sync_world::RenderEntity,
     view::{
-        ColorGrading, ExtractedView, ExtractedWindows, Msaa, NoIndirectDrawing, RenderLayers,
-        RenderVisibleEntities, RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
+        ColorGrading, ExtractedView, Msaa, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
+        RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
     },
     Extract,
 };
 use bevy_asset::{AssetEvent, AssetId, Assets};
 use bevy_ecs::{
     change_detection::DetectChanges,
-    component::{Component, HookContext},
+    component::Component,
     entity::Entity,
     event::EventReader,
     prelude::With,
@@ -29,7 +26,6 @@ use bevy_ecs::{
     reflect::ReflectComponent,
     relationship::RelationshipSourceCollection,
     system::{Commands, Query, Res, ResMut},
-    world::DeferredWorld,
 };
 use bevy_image::Image;
 use bevy_math::{ops, vec2, Dir3, Mat4, Ray3d, URect, UVec2, UVec4, Vec2, Vec3};
@@ -38,130 +34,9 @@ use bevy_reflect::prelude::*;
 use bevy_render_macros::ExtractComponent;
 use bevy_transform::components::{GlobalTransform, Transform};
 use bevy_window::{PrimaryWindow, Window, WindowCreated, WindowResized, WindowScaleFactorChanged};
-use core::ops::Range;
 use thiserror::Error;
 use tracing::warn;
 use wgpu::{BlendState, TextureUsages};
-
-/// Render viewport configuration for the [`Camera`] component.
-///
-/// The viewport defines the area on the render target to which the camera renders its image.
-/// You can overlay multiple cameras in a single window using viewports to create effects like
-/// split screen, minimaps, and character viewers.
-#[derive(Reflect, Debug, Clone)]
-#[reflect(Default, Clone)]
-pub struct Viewport {
-    /// The physical position to render this viewport to within the [`RenderTarget`] of this [`Camera`].
-    /// (0,0) corresponds to the top-left corner
-    pub physical_position: UVec2,
-    /// The physical size of the viewport rectangle to render to within the [`RenderTarget`] of this [`Camera`].
-    /// The origin of the rectangle is in the top-left corner.
-    pub physical_size: UVec2,
-    /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
-    pub depth: Range<f32>,
-}
-
-impl Default for Viewport {
-    fn default() -> Self {
-        Self {
-            physical_position: Default::default(),
-            physical_size: UVec2::new(1, 1),
-            depth: 0.0..1.0,
-        }
-    }
-}
-
-impl Viewport {
-    /// Cut the viewport rectangle so that it lies inside a rectangle of the
-    /// given size.
-    ///
-    /// If either of the viewport's position coordinates lies outside the given
-    /// dimensions, it will be moved just inside first. If either of the given
-    /// dimensions is zero, the position and size of the viewport rectangle will
-    /// both be set to zero in that dimension.
-    pub fn clamp_to_size(&mut self, size: UVec2) {
-        // If the origin of the viewport rect is outside, then adjust so that
-        // it's just barely inside. Then, cut off the part that is outside.
-        if self.physical_size.x + self.physical_position.x > size.x {
-            if self.physical_position.x < size.x {
-                self.physical_size.x = size.x - self.physical_position.x;
-            } else if size.x > 0 {
-                self.physical_position.x = size.x - 1;
-                self.physical_size.x = 1;
-            } else {
-                self.physical_position.x = 0;
-                self.physical_size.x = 0;
-            }
-        }
-        if self.physical_size.y + self.physical_position.y > size.y {
-            if self.physical_position.y < size.y {
-                self.physical_size.y = size.y - self.physical_position.y;
-            } else if size.y > 0 {
-                self.physical_position.y = size.y - 1;
-                self.physical_size.y = 1;
-            } else {
-                self.physical_position.y = 0;
-                self.physical_size.y = 0;
-            }
-        }
-    }
-}
-
-/// Settings to define a camera sub view.
-///
-/// When [`Camera::sub_camera_view`] is `Some`, only the sub-section of the
-/// image defined by `size` and `offset` (relative to the `full_size` of the
-/// whole image) is projected to the cameras viewport.
-///
-/// Take the example of the following multi-monitor setup:
-/// ```css
-/// ┌───┬───┐
-/// │ A │ B │
-/// ├───┼───┤
-/// │ C │ D │
-/// └───┴───┘
-/// ```
-/// If each monitor is 1920x1080, the whole image will have a resolution of
-/// 3840x2160. For each monitor we can use a single camera with a viewport of
-/// the same size as the monitor it corresponds to. To ensure that the image is
-/// cohesive, we can use a different sub view on each camera:
-/// - Camera A: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,0
-/// - Camera B: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 1920,0
-/// - Camera C: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,1080
-/// - Camera D: `full_size` = 3840x2160, `size` = 1920x1080, `offset` =
-///   1920,1080
-///
-/// However since only the ratio between the values is important, they could all
-/// be divided by 120 and still produce the same image. Camera D would for
-/// example have the following values:
-/// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
-#[derive(Debug, Component, Clone, Copy, Reflect, PartialEq)]
-#[component(immutable, on_insert = Self::on_insert)]
-#[reflect(Clone, PartialEq, Default)]
-pub struct SubView {
-    /// Size of the entire camera view
-    pub full_size: UVec2,
-    /// Offset of the sub camera
-    pub offset: Vec2,
-    /// Size of the sub camera
-    pub size: UVec2,
-}
-
-impl SubView {
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(CompositorEvent::SubViewChanged, ctx.entity);
-    }
-}
-
-impl Default for SubView {
-    fn default() -> Self {
-        Self {
-            full_size: UVec2::new(1, 1),
-            offset: Vec2::new(0., 0.),
-            size: UVec2::new(1, 1),
-        }
-    }
-}
 
 /// Holds internally computed [`Camera`] values.
 #[derive(Default, Debug, Clone)]
@@ -552,6 +427,14 @@ impl Camera {
     }
 }
 
+// TODO:s for emulating camera_system:
+// - detect window changes (scale factor changed, resize, created)
+//   - collect changed window ids
+// - collect changed image ids
+// - detect render target changes, update info
+// - clamp viewport to size
+// - recalculate projection based on sub-view (KEEP IN CAMERA_SYSTEM)
+
 /// System in charge of updating a [`Camera`] when its window or projection changes.
 ///
 /// The system detects window creation, resize, and scale factor change events to update the camera
@@ -689,18 +572,45 @@ impl Default for CameraMainTextureUsages {
 
 #[derive(Component, Debug)]
 pub struct ExtractedCamera {
-    pub target: Option<NormalizedRenderTarget>,
-    pub physical_viewport_size: Option<UVec2>,
-    pub physical_target_size: Option<UVec2>,
-    pub viewport: Option<Viewport>,
-    pub render_graph: InternedRenderSubGraph,
-    pub order: isize,
-    pub output_mode: CameraOutputMode,
     pub msaa_writeback: bool,
-    pub clear_color: ClearColorConfig,
-    pub sorted_camera_index_for_target: usize,
     pub exposure: f32,
+    /// Typically a right-handed projection matrix, one of either:
+    ///
+    /// Perspective (infinite reverse z)
+    /// ```text
+    /// f = 1 / tan(fov_y_radians / 2)
+    ///
+    /// ⎡ f / aspect  0     0   0 ⎤
+    /// ⎢          0  f     0   0 ⎥
+    /// ⎢          0  0     0  -1 ⎥
+    /// ⎣          0  0  near   0 ⎦
+    /// ```
+    ///
+    /// Orthographic
+    /// ```text
+    /// w = right - left
+    /// h = top - bottom
+    /// d = near - far
+    /// cw = -right - left
+    /// ch = -top - bottom
+    ///
+    /// ⎡  2 / w       0         0  0 ⎤
+    /// ⎢      0   2 / h         0  0 ⎥
+    /// ⎢      0       0     1 / d  0 ⎥
+    /// ⎣ cw / w  ch / h  near / d  1 ⎦
+    /// ```
+    ///
+    /// `clip_from_view[3][3] == 1.0` is the standard way to check if a projection is orthographic
+    ///
+    /// Custom projections are also possible however.
+    pub clip_from_view: Mat4,
+    pub world_from_view: GlobalTransform,
+    // The view-projection matrix. When provided it is used instead of deriving it from
+    // `projection` and `transform` fields, which can be helpful in cases where numerical
+    // stability matters and there is a more direct way to derive the view-projection matrix.
+    pub clip_from_world: Option<Mat4>,
     pub hdr: bool,
+    pub color_grading: ColorGrading,
 }
 
 pub fn extract_cameras(
