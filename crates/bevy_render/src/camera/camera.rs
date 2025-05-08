@@ -25,6 +25,7 @@ use bevy_ecs::{
     query::Has,
     reflect::ReflectComponent,
     relationship::RelationshipSourceCollection,
+    resource::Resource,
     system::{Commands, Query, Res, ResMut},
 };
 use bevy_image::Image;
@@ -764,67 +765,6 @@ pub fn extract_cameras(
                 commands.insert(NoIndirectDrawing);
             }
         };
-    }
-}
-
-/// Cameras sorted by their order field. This is updated in the [`sort_cameras`] system.
-#[derive(Resource, Default)]
-pub struct SortedCameras(pub Vec<SortedCamera>);
-
-pub struct SortedCamera {
-    pub entity: Entity,
-    pub order: isize,
-    pub target: Option<NormalizedRenderTarget>,
-    pub hdr: bool,
-}
-
-pub fn sort_cameras(
-    mut sorted_cameras: ResMut<SortedCameras>,
-    mut cameras: Query<(Entity, &mut ExtractedCamera)>,
-) {
-    sorted_cameras.0.clear();
-    for (entity, camera) in cameras.iter() {
-        sorted_cameras.0.push(SortedCamera {
-            entity,
-            order: camera.order,
-            target: camera.target.clone(),
-            hdr: camera.hdr,
-        });
-    }
-    // sort by order and ensure within an order, RenderTargets of the same type are packed together
-    sorted_cameras
-        .0
-        .sort_by(|c1, c2| (c1.order, &c1.target).cmp(&(c2.order, &c2.target)));
-    let mut previous_order_target = None;
-    let mut ambiguities = <HashSet<_>>::default();
-    let mut target_counts = <HashMap<_, _>>::default();
-    for sorted_camera in &mut sorted_cameras.0 {
-        let new_order_target = (sorted_camera.order, sorted_camera.target.clone());
-        if let Some(previous_order_target) = previous_order_target {
-            if previous_order_target == new_order_target {
-                ambiguities.insert(new_order_target.clone());
-            }
-        }
-        if let Some(target) = &sorted_camera.target {
-            let count = target_counts
-                .entry((target.clone(), sorted_camera.hdr))
-                .or_insert(0usize);
-            let (_, mut camera) = cameras.get_mut(sorted_camera.entity).unwrap();
-            camera.sorted_camera_index_for_target = *count;
-            *count += 1;
-        }
-        previous_order_target = Some(new_order_target);
-    }
-
-    if !ambiguities.is_empty() {
-        warn!(
-            "Camera order ambiguities detected for active cameras with the following priorities: {:?}. \
-            To fix this, ensure there is exactly one Camera entity spawned with a given order for a given RenderTarget. \
-            Ambiguities should be resolved because either (1) multiple active cameras were spawned accidentally, which will \
-            result in rendering multiple instances of the scene or (2) for cases where multiple active cameras is intentional, \
-            ambiguities could result in unpredictable render results.",
-            ambiguities
-        );
     }
 }
 

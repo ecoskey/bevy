@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use bevy_ecs::{
     component::{Component, HookContext},
     entity::{ContainsEntity, Entity},
     event::Event,
     observer::Trigger,
     query::Has,
-    system::Query,
+    system::{Commands, Query},
     world::DeferredWorld,
 };
 use bevy_math::{Rect, URect, UVec2, Vec2};
@@ -28,7 +30,7 @@ use super::{
 )]
 pub struct Compositor {
     views: Vec<Entity>,
-    invalid: bool,
+    target: Arc<(RenderTarget, RenderTargetInfo)>,
 }
 
 #[derive(Component)]
@@ -62,8 +64,16 @@ pub enum CompositorEvent {
 }
 
 fn handle_compositor_events(
-    ev: Trigger<CompositorEvent>,
+    trigger: Trigger<CompositorEvent>,
     compositors: Query<(&mut Compositor, &CompositedViews, &RenderTarget)>,
     views: Query<(&View, &SubView, &mut ViewTarget)>,
+    mut commands: Commands,
 ) {
+    match trigger.event() {
+        CompositorEvent::ViewDisabled => {}
+        CompositorEvent::ViewEnabled => {}
+        CompositorEvent::RenderTargetChanged => todo!(),
+        CompositorEvent::SubViewChanged => todo!(),
+        CompositorEvent::RefreshAll => todo!(),
+    }
 }

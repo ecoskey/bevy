@@ -31,8 +31,6 @@ pub struct RenderTargetInfo {
     pub scale_factor: f32,
 }
 
-
-
 /// The "target" that a [`Camera`] will render to. For example, this could be a [`Window`]
 /// swapchain or an [`Image`].
 #[derive(Component, Debug, Clone, Reflect, From)]
@@ -49,9 +47,7 @@ pub enum RenderTarget {
 }
 
 impl RenderTarget {
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        world.
-    }
+    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {}
 
     fn on_remove(mut world: DeferredWorld, ctx: HookContext) {}
 }

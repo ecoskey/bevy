@@ -8,6 +8,7 @@ use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use tracing::warn;
 
 use core::ops::Range;
+use std::sync::Arc;
 
 use crate::sync_world::SyncToRenderWorld;
 
@@ -178,8 +179,7 @@ impl Viewport {
 
 #[derive(Component, Default)]
 pub struct ViewTarget {
-    target: RenderTarget,
-    target_info: RenderTargetInfo,
+    target: Arc<(RenderTarget, RenderTargetInfo)>,
     viewport: Option<Viewport>,
 }
 
@@ -187,12 +187,12 @@ pub struct ViewTarget {
 impl ViewTarget {
     #[inline]
     pub fn target(&self) -> &RenderTarget {
-        &self.target
+        &self.target.0
     }
 
     #[inline]
     pub fn target_info(&self) -> &RenderTargetInfo {
-        &self.target_info
+        &self.target.1
     }
 
     #[inline]
@@ -203,7 +203,7 @@ impl ViewTarget {
     /// Converts a physical size in this `Camera` to a logical size.
     #[inline]
     pub fn to_logical(&self, physical_size: UVec2) -> Vec2 {
-        let scale = self.target_info.scale_factor;
+        let scale = self.target_info().scale_factor;
         physical_size.as_vec2() / scale
     }
 
@@ -265,7 +265,7 @@ impl ViewTarget {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::logical_viewport_size`].
     #[inline]
     pub fn logical_target_size(&self) -> Vec2 {
-        self.to_logical(self.target_info.physical_size)
+        self.to_logical(self.target_info().physical_size)
     }
 
     /// The full physical size of this camera's [`RenderTarget`] (in physical pixels),
@@ -274,11 +274,11 @@ impl ViewTarget {
     /// For logic that requires the size of the actually rendered area, prefer [`Camera::physical_viewport_size`].
     #[inline]
     pub fn physical_target_size(&self) -> UVec2 {
-        self.target_info.physical_size
+        self.target_info().physical_size
     }
 
     #[inline]
     pub fn target_scaling_factor(&self) -> f32 {
-        self.target_info.scale_factor
+        self.target_info().scale_factor
     }
 }
