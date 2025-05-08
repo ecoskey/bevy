@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_ecs::{
     component::{Component, HookContext},
-    entity::{ContainsEntity, Entity},
+    entity::{ContainsEntity, Entity, MapEntities},
     event::Event,
     observer::Trigger,
     query::Has,
@@ -15,14 +15,12 @@ use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 
 use crate::{render_graph::RenderSubGraph, sync_world::SyncToRenderWorld};
 
-use super::{
-    RenderGraphDriver, RenderTarget, RenderTargetInfo, SubView, View, ViewTarget, Viewport,
-};
+use super::{RenderGraphDriver, RenderTarget, RenderTargetInfo, SubView, View, ViewTarget};
 
 // -----------------------------------------------------------------------------
 // Core Compositor Types
 
-#[derive(Component, Default)]
+#[derive(Component, Default, MapEntities)]
 #[require(
     RenderTarget,
     CompositedViews,
@@ -30,6 +28,7 @@ use super::{
     SyncToRenderWorld
 )]
 pub struct Compositor {
+    #[entities]
     views: Vec<Entity>,
     target: Arc<(RenderTarget, RenderTargetInfo)>,
 }
@@ -70,10 +69,11 @@ fn handle_compositor_events(
     views: Query<(&View, &SubView, &mut ViewTarget)>,
     mut commands: Commands,
 ) {
+    let src_entity = todo!();
     match trigger.event() {
         CompositorEvent::ViewDisabled => {
-            compositors.get_mut(trigger.target)
-            commands.entity()
+            compositors.get_mut(src_entity);
+            commands.entity(src_entity)
         }
         CompositorEvent::ViewEnabled => {}
         CompositorEvent::RenderTargetChanged => todo!(),
