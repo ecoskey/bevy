@@ -8,6 +8,7 @@ use crate::{
     camera::ManualTextureViews,
     primitives::Frustum,
     render_graph::InternedRenderSubGraph,
+    render_phase::Rangefinder3d,
     sync_world::RenderEntity,
     view::{
         ColorGrading, ExtractedView, Msaa, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
@@ -612,6 +613,13 @@ pub struct ExtractedCamera {
     pub clip_from_world: Option<Mat4>,
     pub hdr: bool,
     pub color_grading: ColorGrading,
+}
+
+impl ExtractedCamera {
+    /// Creates a 3D rangefinder for a view
+    pub fn rangefinder3d(&self) -> Rangefinder3d {
+        Rangefinder3d::from_world_from_view(&self.world_from_view.compute_matrix())
+    }
 }
 
 pub fn extract_cameras(

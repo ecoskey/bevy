@@ -15,7 +15,7 @@ use crate::{
     primitives::Frustum,
     render_asset::RenderAssets,
     render_graph::InternedRenderSubGraph,
-    render_phase::ViewRangefinder3d,
+    render_phase::Rangefinder3d,
     render_resource::{DynamicUniformBuffer, ShaderType, Texture, TextureView},
     renderer::{RenderDevice, RenderQueue},
     sync_world::MainEntity,
@@ -258,12 +258,7 @@ pub struct ExtractedView {
     pub render_graph: InternedRenderSubGraph,
 }
 
-impl ExtractedView {
-    /// Creates a 3D rangefinder for a view
-    pub fn rangefinder3d(&self) -> ViewRangefinder3d {
-        ViewRangefinder3d::from_world_from_view(&self.world_from_view.compute_matrix())
-    }
-}
+impl ExtractedView {}
 
 /// Configures filmic color grading parameters to adjust the image appearance.
 ///
