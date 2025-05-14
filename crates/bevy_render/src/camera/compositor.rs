@@ -1,13 +1,11 @@
 use bevy_asset::Assets;
 use bevy_ecs::{
     component::{Component, HookContext},
-    entity::{ContainsEntity, Entity, MapEntities},
+    entity::{ContainsEntity, Entity},
     event::Event,
     observer::Trigger,
     query::{Has, QueryEntityError, With},
-    reflect::ReflectComponent,
     system::{Commands, Query, Res, Single},
-    world::DeferredWorld,
 };
 use bevy_image::Image;
 use bevy_platform::sync::Arc;
@@ -66,16 +64,16 @@ pub struct CompositorEvent {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum CompositorEventType {
+    RenderTargetChanged,
     ViewChanged,
     SubViewChanged,
-    RenderTargetChanged,
     RefreshAll,
 }
 
 fn handle_compositor_events(
     trigger: Trigger<CompositorEvent>,
     mut compositors: Query<(&mut Compositor, &RenderTarget, &CompositedViews)>,
-    mut views: Query<(&View, &SubView, &mut ViewTarget)>,
+    mut views: Query<(&View, Option<&SubView>, Option<&mut ViewTarget>)>,
     primary_window: Option<Single<Entity, With<PrimaryWindow>>>,
     windows: Query<(Entity, &Window)>,
     images: Res<Assets<Image>>,
@@ -90,7 +88,7 @@ fn handle_compositor_events(
         return;
     };
 
-    let mut handle_render_target_changed = || {
+    let mut handle_render_target_changed = |commands| {
         match render_target.normalize(primary_window.as_deref().copied()) {
             Some(normalized_target) => {
                 let target_info = normalized_target.get_render_target_info(
@@ -107,25 +105,29 @@ fn handle_compositor_events(
         }
     };
 
-    let mut handle_view_changed =
-        |view: Entity, target: Arc<(NormalizedRenderTarget, RenderTargetInfo)>| {
-            match views.get_mut(view) {
-                Ok((View::Enabled, sub_view, mut view_target)) => {
-                    //TODO: no unwrap, actually calculate viewports
-                    *view_target = ViewTarget {
-                        target,
-                        viewport: None,
-                    };
+    let mut handle_view_changed = |view: Entity,
+                                   target: Arc<(NormalizedRenderTarget, RenderTargetInfo)>,
+                                   commands: &mut Commands| {
+        match views.get_mut(view) {
+            Ok((View::Enabled, sub_view, view_target)) => {
+                let viewport =
+                    sub_view.map(|sub_view| sub_view.get_viewport(target.1.physical_size));
+                let new_target = ViewTarget { target, viewport };
+                if let Some(mut view_target) = view_target {
+                    *view_target = new_target;
+                } else {
+                    commands.entity(view).insert(new_target);
                 }
-                Err(QueryEntityError::QueryDoesNotMatch(..)) => {
-                    commands.entity(view).remove::<ViewTarget>();
-                }
-                // entity does not exist, or mutable access error. In either case, we can ignore it.
-                _ => {}
             }
-        };
+            Err(QueryEntityError::QueryDoesNotMatch(..)) => {
+                commands.entity(view).remove::<ViewTarget>();
+            }
+            // entity does not exist, or mutable access error. In either case, we can ignore it.
+            _ => {}
+        }
+    };
 
-    let handle_sub_view_changed = |view: Entity| {
+    let mut handle_sub_view_changed = |view: Entity, commands: &mut Commands| {
         match views.get_mut(view) {
             Ok((View::Enabled, sub_view, mut view_target)) => {}
             Err(QueryEntityError::QueryDoesNotMatch(..)) => {
@@ -137,10 +139,10 @@ fn handle_compositor_events(
     };
 
     match ty {
-        CompositorEventType::RenderTargetChanged => handle_render_target_changed(),
+        CompositorEventType::RenderTargetChanged => handle_render_target_changed(&mut commands),
         CompositorEventType::ViewChanged => {
             if let Some(target) = compositor.target.as_ref() {
-                handle_view_changed(source, target.clone());
+                handle_view_changed(source, target.clone(), &mut commands);
             } else {
                 //warn on invalid compositor state;
             }

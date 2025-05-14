@@ -14,8 +14,6 @@ use bevy_transform::{components::GlobalTransform, TransformSystems};
 use derive_more::derive::From;
 use serde::{Deserialize, Serialize};
 
-use super::SubRect;
-
 /// Adds [`Camera`](crate::camera::Camera) driver systems for a given projection type.
 ///
 /// If you are using `bevy_pbr`, then you need to add `PbrProjectionPlugin` along with this.
