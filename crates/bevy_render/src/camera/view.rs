@@ -3,18 +3,18 @@ use bevy_ecs::{
     query::Has,
     world::DeferredWorld,
 };
-use bevy_math::{Rect, URect, UVec2, Vec2};
+use bevy_math::{CompassOctant, Rect, URect, UVec2, Vec2, VectorSpace};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use tracing::warn;
 
 use core::ops::Range;
 use std::sync::Arc;
 
-use crate::sync_world::SyncToRenderWorld;
+use crate::{primitives::SubRect, sync_world::SyncToRenderWorld};
 
 use super::{
     CompositedBy, CompositorEvent, CompositorEventType, NormalizedRenderTarget, RenderGraphDriver,
-    RenderTargetInfo,
+    RenderTargetInfo, SubRect,
 };
 
 #[derive(Copy, Clone, Default, Debug, Component, Reflect)]
@@ -91,16 +91,20 @@ impl View {
 /// example have the following values:
 /// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
 #[derive(Debug, Component, Clone, Reflect, PartialEq)]
-#[component(immutable, on_insert = Self::on_insert)]
+#[component(
+    immutable, 
+    on_insert = Self::trigger_sub_view_changed, 
+    on_remove = Self::trigger_sub_view_changed
+)]
 #[reflect(Clone, PartialEq, Default)]
 pub struct SubView {
-    pub rect: SubRect,
+    pub sub_rect: SubRect,
     /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
     pub depth: Range<f32>,
 }
 
 impl SubView {
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
+    fn trigger_sub_view_changed(mut world: DeferredWorld, ctx: HookContext) {
         world.trigger_targets(
             CompositorEvent {
                 source: ctx.entity,
@@ -110,36 +114,20 @@ impl SubView {
         );
     }
 
-    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::SubViewChanged,
-            },
-            ctx.entity,
-        );
-
-        if world
-            .get_entity(ctx.entity)
-            .is_ok_and(|e| e.get::<View>().is_some())
-        {
-            world
-                .commands()
-                .entity(ctx.entity)
-                .insert(SubView::default());
-
-            warn!(
-                "{}Entity {} has a View component but its SubView was removed. Reinserting a default SubView.",
-                ctx.caller.map(|location| format!("{location}: ")).unwrap_or_default(), ctx.entity,
-            );
-        }
+    pub fn get_viewport(&self, physical_size: UVec2) -> Viewport {
+        let viewport_rect = self.sub_rect.to_rect(physical_size);
+        Viewport { 
+            physical_position: viewport_rect.min,
+            physical_size: viewport_rect.size(), 
+            depth: self.depth.clone() 
+        } 
     }
 }
 
 impl Default for SubView {
     fn default() -> Self {
         Self {
-            rect: Default::default(),
+            sub_rect: Default::default(),
             depth: 0.0..1.0,
         }
     }

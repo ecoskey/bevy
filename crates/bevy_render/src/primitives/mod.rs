@@ -2,9 +2,11 @@ use core::borrow::Borrow;
 
 use bevy_ecs::{component::Component, entity::EntityHashMap, reflect::ReflectComponent};
 use bevy_math::{
-    Affine3A, CompassOctant, Mat3A, Mat4, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
+    Affine3A, CompassOctant, Mat3A, Mat4, Rect, URect, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
 };
 use bevy_reflect::prelude::*;
+
+use crate::camera::Viewport;
 
 /// An axis-aligned bounding box, defined by:
 /// - a center,
@@ -195,11 +197,11 @@ impl SubRect {
         }
     }
 
-    pub fn to_rect(self, full_size: UVec2) -> Rect {
+    pub fn to_rect(self, full_size: UVec2) -> URect {
         todo!()
     }
 
-    pub fn from_rect(full_size: UVec2) -> Self {
+    pub fn from_rect(full_size: UVec2, rect: URect) -> Self {
         todo!()
     }
 

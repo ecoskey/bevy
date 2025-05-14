@@ -1,6 +1,9 @@
 use core::fmt::Debug;
 
-use crate::{primitives::Frustum, view::VisibilitySystems};
+use crate::{
+    primitives::{Frustum, SubRect},
+    view::VisibilitySystems,
+};
 use bevy_app::{App, Plugin, PostStartup, PostUpdate};
 use bevy_asset::AssetEventSystems;
 use bevy_derive::{Deref, DerefMut};
@@ -10,8 +13,6 @@ use bevy_reflect::{std_traits::ReflectDefault, Reflect, ReflectDeserialize, Refl
 use bevy_transform::{components::GlobalTransform, TransformSystems};
 use derive_more::derive::From;
 use serde::{Deserialize, Serialize};
-
-use super::SubRect;
 
 /// Adds [`Camera`](crate::camera::Camera) driver systems for a given projection type.
 ///
