@@ -94,24 +94,12 @@ impl View {
 #[component(immutable, on_insert = Self::on_insert)]
 #[reflect(Clone, PartialEq, Default)]
 pub struct SubView {
-    /// Size of the entire camera view
-    pub full_size: UVec2,
-    // TODO: docs. viewport
-    pub viewport_rect: URect,
-    // TODO: docs. basically what `SubCameraView` used to be.
-    pub crop_rect: URect,
+    pub rect: SubRect,
     /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
     pub depth: Range<f32>,
 }
 
 impl SubView {
-    fn shrink_to_fit(&mut self) {
-        let full_rect = URect {
-            min: UVec2::ZERO,
-            max: self.full_size,
-        };
-    }
-
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
         world.trigger_targets(
             CompositorEvent {
@@ -151,9 +139,7 @@ impl SubView {
 impl Default for SubView {
     fn default() -> Self {
         Self {
-            full_size: UVec2::new(1, 1),
-            offset: Vec2::new(0., 0.),
-            size: UVec2::new(1, 1),
+            rect: Default::default(),
             depth: 0.0..1.0,
         }
     }

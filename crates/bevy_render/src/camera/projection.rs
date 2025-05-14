@@ -14,6 +14,8 @@ use bevy_transform::{components::GlobalTransform, TransformSystems};
 use derive_more::derive::From;
 use serde::{Deserialize, Serialize};
 
+use super::SubRect;
+
 /// Adds [`Camera`](crate::camera::Camera) driver systems for a given projection type.
 ///
 /// If you are using `bevy_pbr`, then you need to add `PbrProjectionPlugin` along with this.
@@ -266,9 +268,9 @@ impl CameraProjection for Projection {
 
     fn get_clip_from_view_for_sub(&self, sub_view: &SubRect) -> Mat4 {
         match self {
-            Projection::Perspective(projection) => projection.get_clip_from_view_for_sub(sub_view),
-            Projection::Orthographic(projection) => projection.get_clip_from_view_for_sub(sub_view),
-            Projection::Custom(projection) => projection.get_clip_from_view_for_sub(sub_view),
+            Projection::Perspective(projection) => projection.get_clip_from_view_for_sub(sub_rect),
+            Projection::Orthographic(projection) => projection.get_clip_from_view_for_sub(sub_rect),
+            Projection::Custom(projection) => projection.get_clip_from_view_for_sub(sub_rect),
         }
     }
 

@@ -2,7 +2,7 @@ use core::borrow::Borrow;
 
 use bevy_ecs::{component::Component, entity::EntityHashMap, reflect::ReflectComponent};
 use bevy_math::{
-    Affine3A, CompassOctant, Mat3A, Mat4, URect, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
+    Affine3A, CompassOctant, Mat3A, Mat4, UVec2, Vec2, Vec3, Vec3A, Vec4, Vec4Swizzles,
 };
 use bevy_reflect::prelude::*;
 
@@ -122,6 +122,91 @@ impl From<Sphere> for Aabb {
             center: sphere.center,
             half_extents: Vec3A::splat(sphere.radius),
         }
+    }
+}
+
+/// A proportionally-sized "sub-rectangle".
+///
+/// TODO: more docs
+#[derive(Copy, Clone, PartialEq, Debug, Reflect)]
+pub struct SubRect {
+    /// Size of the whole rectantle
+    pub full_size: UVec2,
+    /// Offset of the sub-rectangle from the top-left.
+    pub offset: Vec2,
+    /// Size of the sub-rectangle.
+    pub size: UVec2,
+}
+
+impl Default for SubRect {
+    fn default() -> Self {
+        Self {
+            full_size: UVec2::ONE,
+            offset: Vec2::ZERO,
+            size: UVec2::ONE,
+        }
+    }
+}
+
+//todo: docs
+impl SubRect {
+    pub fn octant(oct: CompassOctant) -> Self {
+        //todo: clean this up, branchless if possible
+
+        match oct {
+            CompassOctant::North => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(0.),
+                size: UVec2::new(2, 1),
+            },
+            CompassOctant::NorthEast => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(0.),
+                size: UVec2::splat(1),
+            },
+            CompassOctant::East => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::new(1., 0.),
+                size: UVec2::splat(1),
+            },
+            CompassOctant::SouthEast => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(1.),
+                size: UVec2::splat(1),
+            },
+            CompassOctant::South => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::new(0., 1.),
+                size: UVec2::new(2, 1),
+            },
+            CompassOctant::SouthWest => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(1.),
+                size: UVec2::splat(1),
+            },
+            CompassOctant::West => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(0.),
+                size: UVec2::new(1, 2),
+            },
+            CompassOctant::NorthWest => Self {
+                full_size: UVec2::splat(2),
+                offset: Vec2::splat(0.),
+                size: UVec2::splat(1),
+            },
+        }
+    }
+
+    pub fn to_rect(self, full_size: UVec2) -> Rect {
+        todo!()
+    }
+
+    pub fn from_rect(full_size: UVec2) -> Self {
+        todo!()
+    }
+
+    pub fn chain(self, inner: Self) -> Self {
+        todo!()
     }
 }
 

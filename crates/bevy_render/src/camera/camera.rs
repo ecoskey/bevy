@@ -2,7 +2,7 @@
     clippy::module_inception,
     reason = "The parent module contains all things viewport-related, while this module handles cameras as a component. However, a rename/refactor which should clear up this lint is being discussed; see #17196."
 )]
-use super::{ClearColorConfig, Projection, View, ViewTarget};
+use super::{ClearColorConfig, Projection, SubRect, View, ViewTarget};
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
     camera::{CameraProjection, ManualTextureViewHandle, ManualTextureViews},
@@ -205,6 +205,7 @@ pub struct Camera {
     /// Computed values for this camera, such as the projection matrix and the render target size.
     #[reflect(ignore, clone)]
     pub computed: ComputedCameraValues,
+    pub crop: SubRect,
     /// The blend state that will be used by the pipeline that writes the intermediate render textures to the final render target texture.
     #[reflect(ignore)]
     pub blend_state: Option<BlendState>,
