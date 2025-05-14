@@ -8,6 +8,7 @@ mod render_target;
 mod view;
 
 use bevy_derive::{Deref, DerefMut};
+use bevy_math::{CompassOctant, Rect, UVec2, Vec2};
 use bevy_reflect::Reflect;
 pub use camera::*;
 pub use clear_color::*;
@@ -114,3 +115,4 @@ fn warn_on_noop_view_render_graph(world: DeferredWorld, ctx: HookContext) {
         );
     }
 }
+
