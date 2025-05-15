@@ -1,6 +1,7 @@
 use bevy_ecs::{
     component::{Component, HookContext},
     query::Has,
+    system::entity_command::trigger,
     world::DeferredWorld,
 };
 use bevy_math::{CompassOctant, Rect, URect, UVec2, Vec2, VectorSpace};
@@ -18,7 +19,7 @@ use super::{
 };
 
 #[derive(Copy, Clone, Default, Debug, Component, Reflect)]
-#[component(immutable, on_insert = Self::on_insert, on_remove = Self::on_remove)]
+#[component(immutable, on_insert = Self::on_insert, on_remove = trigger_view_changed)]
 #[require(RenderGraphDriver, SyncToRenderWorld)]
 pub enum View {
     Disabled,
@@ -32,13 +33,7 @@ impl View {
     }
 
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::ViewChanged,
-            },
-            ctx.entity,
-        );
+        world.trigger_targets(CompositorEvent::ViewChanged(ctx.entity), ctx.entity);
 
         if world.entity(ctx.entity).get::<CompositedBy>().is_none() {
             warn!(
@@ -50,16 +45,10 @@ impl View {
             );
         }
     }
+}
 
-    fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::ViewChanged,
-            },
-            ctx.entity,
-        );
-    }
+fn trigger_view_changed(mut world: DeferredWorld, ctx: HookContext) {
+    world.trigger_targets(CompositorEvent::ViewChanged(ctx.entity), ctx.entity);
 }
 
 /// Settings to define a sub view.
@@ -92,9 +81,9 @@ impl View {
 /// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
 #[derive(Debug, Component, Clone, Reflect, PartialEq)]
 #[component(
-    immutable, 
-    on_insert = Self::trigger_sub_view_changed, 
-    on_remove = Self::trigger_sub_view_changed
+    immutable,
+    on_insert = trigger_view_changed,
+    on_remove = trigger_view_changed
 )]
 #[reflect(Clone, PartialEq, Default)]
 pub struct SubView {
@@ -104,23 +93,13 @@ pub struct SubView {
 }
 
 impl SubView {
-    fn trigger_sub_view_changed(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::SubViewChanged,
-            },
-            ctx.entity,
-        );
-    }
-
     pub fn get_viewport(&self, physical_size: UVec2) -> Viewport {
         let viewport_rect = self.sub_rect.to_rect(physical_size);
-        Viewport { 
+        Viewport {
             physical_position: viewport_rect.min,
-            physical_size: viewport_rect.size(), 
-            depth: self.depth.clone() 
-        } 
+            physical_size: viewport_rect.size(),
+            depth: self.depth.clone(),
+        }
     }
 }
 
