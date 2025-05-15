@@ -27,7 +27,7 @@ pub enum View {
 }
 
 impl View {
-    pub fn enabled(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         matches!(self, Self::Enabled)
     }
 

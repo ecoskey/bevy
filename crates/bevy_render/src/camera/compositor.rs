@@ -5,11 +5,12 @@ use bevy_ecs::{
     event::Event,
     observer::Trigger,
     query::{Has, QueryEntityError, With},
-    system::{Commands, Query, Res, Single},
+    system::{Commands, Local, Query, Res, Single},
 };
 use bevy_image::Image;
 use bevy_platform::sync::Arc;
 use bevy_window::{PrimaryWindow, Window};
+use core::iter::Copied;
 use tracing::warn;
 
 use crate::{render_graph::RenderSubGraph, sync_world::SyncToRenderWorld};
@@ -49,6 +50,28 @@ impl ContainsEntity for CompositedBy {
 #[relationship_target(relationship = CompositedBy)]
 pub struct CompositedViews(Vec<Entity>);
 
+impl<'a> IntoIterator for &'a CompositedViews {
+    type Item = Entity;
+
+    type IntoIter = Copied<<&'a Vec<Entity> as IntoIterator>::IntoIter>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.0).into_iter().copied()
+    }
+}
+
+impl FromIterator<Entity> for CompositedViews {
+    fn from_iter<T: IntoIterator<Item = Entity>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
+impl CompositedViews {
+    pub fn iter(&self) -> impl Iterator<Item = Entity> {
+        self.into_iter()
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, RenderSubGraph)]
 pub struct SimpleCompositorGraph;
 
@@ -57,17 +80,9 @@ pub struct SimpleCompositorGraph;
 
 #[derive(Event)]
 #[event(auto_propagate, traversal = &'static CompositedBy)]
-pub struct CompositorEvent {
-    pub source: Entity,
-    pub ty: CompositorEventType,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum CompositorEventType {
-    RenderTargetChanged,
-    ViewChanged,
-    SubViewChanged,
-    RefreshAll,
+pub enum CompositorEvent {
+    CompositorChanged,
+    ViewChanged(Entity),
 }
 
 fn handle_compositor_events(
@@ -80,86 +95,86 @@ fn handle_compositor_events(
     manual_texture_views: Res<ManualTextureViews>,
     mut commands: Commands,
 ) {
-    let CompositorEvent { source, ty } = *trigger.event();
     let Ok((mut compositor, render_target, composited_views)) =
         compositors.get_mut(trigger.target())
     else {
-        warn!("");
         return;
     };
 
-    let mut handle_render_target_changed = |commands| {
-        match render_target.normalize(primary_window.as_deref().copied()) {
-            Some(normalized_target) => {
-                let target_info = normalized_target.get_render_target_info(
+    fn update_compositor<'a>(
+        compositor: &mut Compositor,
+        render_target: &RenderTarget,
+        primary_window: Option<Entity>,
+        windows: impl IntoIterator<Item = (Entity, &'a Window)>,
+        images: &Assets<Image>,
+        manual_texture_views: &ManualTextureViews,
+    ) {
+        compositor.target = render_target
+            .normalize(primary_window)
+            .and_then(|normalized_target| {
+                Some(normalized_target.clone()).zip(normalized_target.get_render_target_info(
                     windows,
-                    &images,
-                    &manual_texture_views,
-                );
-                let new_target = Arc::new((render_target.clone(), render_target));
-                //todo: recalculate render target info, propagate to all views
-            }
-            None => {
-                compositor.target = None;
-            }
-        }
-    };
+                    images,
+                    manual_texture_views,
+                ))
+            })
+            .map(Arc::new);
+    }
 
-    let mut handle_view_changed = |view: Entity,
-                                   target: Arc<(NormalizedRenderTarget, RenderTargetInfo)>,
-                                   commands: &mut Commands| {
+    fn update_view(
+        compositor: &Compositor,
+        view: Entity,
+        mut views: Query<(&View, Option<&SubView>, Option<&mut ViewTarget>)>,
+        mut commands: Commands,
+    ) {
+        let Some(target) = &compositor.target else {
+            //todo: warn about invalid compositor state;
+            return;
+        };
+
         match views.get_mut(view) {
             Ok((View::Enabled, sub_view, view_target)) => {
                 let viewport =
                     sub_view.map(|sub_view| sub_view.get_viewport(target.1.physical_size));
-                let new_target = ViewTarget { target, viewport };
+                let new_target = ViewTarget {
+                    target: target.clone(),
+                    viewport,
+                };
                 if let Some(mut view_target) = view_target {
                     *view_target = new_target;
                 } else {
                     commands.entity(view).insert(new_target);
                 }
             }
-            Err(QueryEntityError::QueryDoesNotMatch(..)) => {
+            Ok((View::Disabled, ..)) => {
                 commands.entity(view).remove::<ViewTarget>();
             }
-            // entity does not exist, or mutable access error. In either case, we can ignore it.
-            _ => {}
-        }
-    };
-
-    let mut handle_sub_view_changed = |view: Entity, commands: &mut Commands| {
-        match views.get_mut(view) {
-            Ok((View::Enabled, sub_view, mut view_target)) => {}
             Err(QueryEntityError::QueryDoesNotMatch(..)) => {
-                commands.entity(view).remove::<ViewTarget>();
+                // if entity is not a view, we should remove it from the relationship
+                commands.entity(view).remove::<(ViewTarget, CompositedBy)>();
             }
-            // entity does not exist, or mutable access error. In either case, we can ignore it.
+            // view was despawned, ignore.
             _ => {}
         }
-    };
+    }
 
-    match ty {
-        CompositorEventType::RenderTargetChanged => handle_render_target_changed(&mut commands),
-        CompositorEventType::ViewChanged => {
-            if let Some(target) = compositor.target.as_ref() {
-                handle_view_changed(source, target.clone(), &mut commands);
-            } else {
-                //warn on invalid compositor state;
-            }
-        }
-        CompositorEventType::SubViewChanged => {
-            match views.get_mut(source) {
-                Ok((view, sub_view, mut view_target)) => {
-                    //todo: recalculate viewport
-                }
-                Err(QueryEntityError::EntityDoesNotExist(..)) => {
-                    // View was despawned or the event incorrectly targeted a non-view.
-                    // Either way, don't need to do anything.
-                }
-                _ => unreachable!(),
-            }
-        }
+    match *trigger.event() {
+        CompositorEvent::CompositorChanged => {
+            update_compositor(
+                &mut compositor,
+                render_target,
+                primary_window.as_deref().copied(),
+                windows,
+                &images,
+                &manual_texture_views,
+            );
 
-        CompositorEventType::RefreshAll => {}
+            composited_views.iter().for_each(|view| {
+                update_view(&compositor, view, views.reborrow(), commands.reborrow());
+            });
+        }
+        CompositorEvent::ViewChanged(view) => {
+            update_view(&compositor, view, views, commands);
+        }
     }
 }
