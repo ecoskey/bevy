@@ -13,7 +13,11 @@ use bevy_window::{PrimaryWindow, Window};
 use core::iter::Copied;
 use tracing::warn;
 
-use crate::{render_graph::RenderSubGraph, sync_world::SyncToRenderWorld};
+use crate::{
+    render_graph::{InternedRenderSubGraph, RenderSubGraph},
+    sync_world::{RenderEntity, SyncToRenderWorld},
+    Extract,
+};
 
 use super::{
     ManualTextureViews, NormalizedRenderTarget, RenderGraphDriver, RenderTarget, RenderTargetInfo,
@@ -177,4 +181,28 @@ fn handle_compositor_events(
             update_view(&compositor, view, views, commands);
         }
     }
+}
+
+// -----------------------------------------------------------------------------
+// Extraction / Render World Logic
+
+#[derive(Component)]
+pub struct ExtractedCompositor {
+    views: Vec<Entity>,
+    target: Arc<(NormalizedRenderTarget, RenderTargetInfo)>,
+    sub_graph: InternedRenderSubGraph,
+}
+
+pub(super) fn extract_compositors(
+    main_compoitors: Extract<
+        Query<(
+            &Compositor,
+            &CompositedViews,
+            &RenderGraphDriver,
+            &RenderEntity,
+        )>,
+    >,
+    render_compositors: Query<&mut ExtractedCompositor>,
+    mut commands: Commands,
+) {
 }
