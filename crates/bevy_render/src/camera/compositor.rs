@@ -89,10 +89,12 @@ pub enum CompositorEvent {
     ViewChanged(Entity),
 }
 
+//TODO: handle window events
+
 fn handle_compositor_events(
     trigger: Trigger<CompositorEvent>,
     mut compositors: Query<(&mut Compositor, &RenderTarget, &CompositedViews)>,
-    mut views: Query<(&View, Option<&SubView>, Option<&mut ViewTarget>)>,
+    mut views: Query<(&View, Option<&SubView>)>,
     primary_window: Option<Single<Entity, With<PrimaryWindow>>>,
     windows: Query<(Entity, &Window)>,
     images: Res<Assets<Image>>,
@@ -102,6 +104,7 @@ fn handle_compositor_events(
     let Ok((mut compositor, render_target, composited_views)) =
         compositors.get_mut(trigger.target())
     else {
+        // events propagate up the compositor's tree, so the target may not be a compositor yet
         return;
     };
 
@@ -128,7 +131,7 @@ fn handle_compositor_events(
     fn update_view(
         compositor: &Compositor,
         view: Entity,
-        mut views: Query<(&View, Option<&SubView>, Option<&mut ViewTarget>)>,
+        mut views: Query<(&View, Option<&SubView>)>,
         mut commands: Commands,
     ) {
         let Some(target) = &compositor.target else {
@@ -137,20 +140,17 @@ fn handle_compositor_events(
         };
 
         match views.get_mut(view) {
-            Ok((View::Enabled, sub_view, view_target)) => {
+            Ok((View::Enabled, sub_view)) => {
                 let viewport =
                     sub_view.map(|sub_view| sub_view.get_viewport(target.1.physical_size));
                 let new_target = ViewTarget {
                     target: target.clone(),
                     viewport,
                 };
-                if let Some(mut view_target) = view_target {
-                    *view_target = new_target;
-                } else {
-                    commands.entity(view).insert(new_target);
-                }
+                commands.entity(view).insert(new_target);
             }
             Ok((View::Disabled, ..)) => {
+                // view was disabled, remove its target
                 commands.entity(view).remove::<ViewTarget>();
             }
             Err(QueryEntityError::QueryDoesNotMatch(..)) => {
