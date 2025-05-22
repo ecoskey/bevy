@@ -2,6 +2,7 @@ pub mod visibility;
 pub mod window;
 
 use bevy_asset::{load_internal_asset, Handle};
+use bevy_platform::collections::HashMap;
 pub use visibility::*;
 pub use window::*;
 

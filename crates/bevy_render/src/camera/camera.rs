@@ -2,15 +2,16 @@
     clippy::module_inception,
     reason = "The parent module contains all things viewport-related, while this module handles cameras as a component. However, a rename/refactor which should clear up this lint is being discussed; see #17196."
 )]
-use super::{ClearColorConfig, Projection, ViewTarget};
+use super::{ClearColorConfig, Projection, RenderGraphDriver, View, ViewTarget};
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
     camera::ManualTextureViews,
     primitives::{Frustum, SubRect},
+    render_phase::Rangefinder3d,
     sync_world::RenderEntity,
     view::{
-        ColorGrading, ExtractedView, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
-        RetainedViewEntity, ViewUniformOffset, VisibleEntities,
+        ColorGrading, ExtractedView, Msaa, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
+        RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
     },
     Extract,
 };
@@ -22,6 +23,7 @@ use bevy_ecs::{
     event::EventReader,
     prelude::With,
     query::Has,
+    reflect::ReflectComponent,
     relationship::RelationshipSourceCollection,
     system::{Commands, Query, Res},
 };
@@ -30,7 +32,7 @@ use bevy_math::{ops, vec2, Dir3, Mat4, Ray3d, URect, UVec2, UVec4, Vec2, Vec3};
 use bevy_platform::collections::HashSet;
 use bevy_reflect::prelude::*;
 use bevy_render_macros::ExtractComponent;
-use bevy_transform::components::GlobalTransform;
+use bevy_transform::components::{GlobalTransform, Transform};
 use bevy_window::{PrimaryWindow, Window, WindowCreated, WindowResized, WindowScaleFactorChanged};
 use thiserror::Error;
 use tracing::warn;
@@ -197,10 +199,11 @@ pub struct Camera {
     #[reflect(ignore, clone)]
     pub computed: ComputedCameraValues,
     pub crop: SubRect,
-    /// The blend state that will be used by the pipeline that writes the intermediate render textures to the final render target texture.
+    pub hdr: bool,
+    /// The blend state that will be used by the pipeline that writes the intermediate render textures to the final view target texture.
     #[reflect(ignore)]
     pub blend_state: Option<BlendState>,
-    /// The clear color operation to perform on the final render target texture.
+    /// The clear color operation to perform on the final view target texture.
     pub clear_color: ClearColorConfig,
 }
 
@@ -572,8 +575,6 @@ impl Default for CameraMainTextureUsages {
 
 #[derive(Component, Debug)]
 pub struct ExtractedCamera {
-    pub msaa_writeback: bool,
-    pub exposure: f32,
     /// Typically a right-handed projection matrix, one of either:
     ///
     /// Perspective (infinite reverse z)
@@ -604,12 +605,14 @@ pub struct ExtractedCamera {
     ///
     /// Custom projections are also possible however.
     pub clip_from_view: Mat4,
-    pub world_from_view: GlobalTransform,
     // The view-projection matrix. When provided it is used instead of deriving it from
     // `projection` and `transform` fields, which can be helpful in cases where numerical
     // stability matters and there is a more direct way to derive the view-projection matrix.
     pub clip_from_world: Option<Mat4>,
+    pub world_from_view: GlobalTransform,
+    pub exposure: f32,
     pub hdr: bool,
+    pub msaa_writeback: bool,
     pub color_grading: ColorGrading,
 }
 
@@ -626,8 +629,9 @@ pub fn extract_cameras(
         Query<(
             Entity,
             RenderEntity,
+            &View,
+            &RenderGraphDriver,
             &Camera,
-            &ViewRenderGraph,
             &GlobalTransform,
             &VisibleEntities,
             &Frustum,

@@ -264,7 +264,7 @@ impl CameraProjection for Projection {
         }
     }
 
-    fn get_clip_from_view_for_sub(&self, sub_view: &SubRect) -> Mat4 {
+    fn get_clip_from_view_for_sub(&self, sub_rect: &SubRect) -> Mat4 {
         match self {
             Projection::Perspective(projection) => projection.get_clip_from_view_for_sub(sub_rect),
             Projection::Orthographic(projection) => projection.get_clip_from_view_for_sub(sub_rect),

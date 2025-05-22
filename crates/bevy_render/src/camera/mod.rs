@@ -6,6 +6,7 @@ mod projection;
 mod render;
 mod render_target;
 mod view;
+mod compositor_graph;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_math::{CompassOctant, Rect, UVec2, Vec2};

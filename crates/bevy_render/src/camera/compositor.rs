@@ -76,9 +76,6 @@ impl CompositedViews {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, RenderSubGraph)]
-pub struct SimpleCompositorGraph;
-
 // -----------------------------------------------------------------------------
 // Compositor Events
 
