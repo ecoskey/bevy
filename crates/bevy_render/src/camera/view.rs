@@ -1,10 +1,8 @@
 use bevy_ecs::{
     component::{Component, HookContext},
-    query::Has,
-    system::entity_command::trigger,
     world::DeferredWorld,
 };
-use bevy_math::{CompassOctant, Rect, URect, UVec2, Vec2, VectorSpace};
+use bevy_math::{Rect, URect, UVec2, Vec2};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use tracing::warn;
 
@@ -14,8 +12,7 @@ use std::sync::Arc;
 use crate::{primitives::SubRect, sync_world::SyncToRenderWorld};
 
 use super::{
-    CompositedBy, CompositorEvent, CompositorEventType, NormalizedRenderTarget, RenderGraphDriver,
-    RenderTargetInfo, SubRect,
+    CompositedBy, CompositorEvent, NormalizedRenderTarget, RenderGraphDriver, RenderTargetInfo,
 };
 
 #[derive(Copy, Clone, Default, Debug, Component, Reflect)]
@@ -32,9 +29,7 @@ impl View {
         matches!(self, Self::Enabled)
     }
 
-    fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(CompositorEvent::ViewChanged(ctx.entity), ctx.entity);
-
+    fn on_insert(world: DeferredWorld, ctx: HookContext) {
         if world.entity(ctx.entity).get::<CompositedBy>().is_none() {
             warn!(
                 concat!(
@@ -44,6 +39,8 @@ impl View {
                 ctx.caller.map(|location| format!("{location}: ")).unwrap_or_default(), ctx.entity,
             );
         }
+
+        trigger_view_changed(world, ctx);
     }
 }
 
@@ -51,34 +48,10 @@ fn trigger_view_changed(mut world: DeferredWorld, ctx: HookContext) {
     world.trigger_targets(CompositorEvent::ViewChanged(ctx.entity), ctx.entity);
 }
 
-/// Settings to define a sub view.
+/// Settings to define the area of a render target to
+/// render a view to.
 ///
-/// When [`Camera::sub_camera_view`] is `Some`, only the sub-section of the
-/// image defined by `size` and `offset` (relative to the `full_size` of the
-/// whole image) is projected to the cameras viewport.
-///
-/// Take the example of the following multi-monitor setup:
-/// ```css
-/// ┌───┬───┐
-/// │ A │ B │
-/// ├───┼───┤
-/// │ C │ D │
-/// └───┴───┘
-/// ```
-/// If each monitor is 1920x1080, the whole image will have a resolution of
-/// 3840x2160. For each monitor we can use a single camera with a viewport of
-/// the same size as the monitor it corresponds to. To ensure that the image is
-/// cohesive, we can use a different sub view on each camera:
-/// - Camera A: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,0
-/// - Camera B: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 1920,0
-/// - Camera C: `full_size` = 3840x2160, `size` = 1920x1080, `offset` = 0,1080
-/// - Camera D: `full_size` = 3840x2160, `size` = 1920x1080, `offset` =
-///   1920,1080
-///
-/// However since only the ratio between the values is important, they could all
-/// be divided by 120 and still produce the same image. Camera D would for
-/// example have the following values:
-/// `full_size` = 32x18, `size` = 16x9, `offset` = 16,9
+/// See [`SubRect`] for more info.
 #[derive(Debug, Component, Clone, Reflect, PartialEq)]
 #[component(
     immutable,
@@ -87,6 +60,7 @@ fn trigger_view_changed(mut world: DeferredWorld, ctx: HookContext) {
 )]
 #[reflect(Clone, PartialEq, Default)]
 pub struct SubView {
+    /// The sub-rectangle within which to render the view.
     pub sub_rect: SubRect,
     /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
     pub depth: Range<f32>,
@@ -94,10 +68,10 @@ pub struct SubView {
 
 impl SubView {
     pub fn get_viewport(&self, physical_size: UVec2) -> Viewport {
-        let viewport_rect = self.sub_rect.to_rect(physical_size);
+        let viewport_rect = self.sub_rect.scaled_roughly_to(physical_size);
         Viewport {
-            physical_position: viewport_rect.min,
-            physical_size: viewport_rect.size(),
+            physical_position: viewport_rect.offset.as_uvec2(),
+            physical_size: viewport_rect.size,
             depth: self.depth.clone(),
         }
     }

@@ -2,19 +2,15 @@
     clippy::module_inception,
     reason = "The parent module contains all things viewport-related, while this module handles cameras as a component. However, a rename/refactor which should clear up this lint is being discussed; see #17196."
 )]
-use super::{ClearColorConfig, Projection, SubRect, View, ViewTarget};
+use super::{ClearColorConfig, Projection, ViewTarget};
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
-    camera::{CameraProjection, ManualTextureViewHandle, ManualTextureViews},
+    camera::ManualTextureViews,
     primitives::{Frustum, SubRect},
-    render_asset::RenderAssets,
-    render_graph::{InternedRenderSubGraph, RenderSubGraph},
-    render_resource::TextureView,
-    sync_world::{RenderEntity, SyncToRenderWorld},
-    texture::GpuImage,
+    sync_world::RenderEntity,
     view::{
-        ColorGrading, ExtractedView, Msaa, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
-        RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
+        ColorGrading, ExtractedView, NoIndirectDrawing, RenderLayers, RenderVisibleEntities,
+        RetainedViewEntity, ViewUniformOffset, VisibleEntities,
     },
     Extract,
 };
@@ -26,17 +22,15 @@ use bevy_ecs::{
     event::EventReader,
     prelude::With,
     query::Has,
-    reflect::ReflectComponent,
     relationship::RelationshipSourceCollection,
-    resource::Resource,
-    system::{Commands, Query, Res, ResMut},
+    system::{Commands, Query, Res},
 };
 use bevy_image::Image;
 use bevy_math::{ops, vec2, Dir3, Mat4, Ray3d, URect, UVec2, UVec4, Vec2, Vec3};
-use bevy_platform::collections::{HashMap, HashSet};
+use bevy_platform::collections::HashSet;
 use bevy_reflect::prelude::*;
 use bevy_render_macros::ExtractComponent;
-use bevy_transform::components::{GlobalTransform, Transform};
+use bevy_transform::components::GlobalTransform;
 use bevy_window::{PrimaryWindow, Window, WindowCreated, WindowResized, WindowScaleFactorChanged};
 use thiserror::Error;
 use tracing::warn;
@@ -46,10 +40,6 @@ use wgpu::{BlendState, TextureUsages};
 #[derive(Default, Debug, Clone)]
 pub struct ComputedCameraValues {
     clip_from_view: Mat4,
-    target_info: Option<RenderTargetInfo>,
-    // size of the `Viewport`
-    old_viewport_size: Option<UVec2>,
-    old_crop: Option<SubRect>,
 }
 
 /// How much energy a `Camera3d` absorbs from incoming light.
@@ -199,6 +189,7 @@ pub enum ViewportConversionError {
     VisibleEntities,
     Transform,
     Visibility,
+    Exposure,
     Msaa
 )]
 pub struct Camera {
