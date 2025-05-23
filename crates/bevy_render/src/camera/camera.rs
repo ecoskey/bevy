@@ -651,8 +651,9 @@ pub fn extract_cameras(
     for (
         main_entity,
         render_entity,
-        camera,
+        view,
         camera_render_graph,
+        camera,
         transform,
         visible_entities,
         frustum,

@@ -30,7 +30,7 @@ use super::{
 #[derive(Component, Default)]
 #[require(
     RenderTarget,
-    CompositedViews,
+    Views,
     RenderGraphDriver::new(SimpleCompositorGraph),
     SyncToRenderWorld
 )]
@@ -39,7 +39,7 @@ pub struct Compositor {
 }
 
 #[derive(Component)]
-#[relationship(relationship_target = CompositedViews)]
+#[relationship(relationship_target = Views)]
 pub struct CompositedBy(pub Entity);
 
 impl ContainsEntity for CompositedBy {
@@ -52,9 +52,9 @@ impl ContainsEntity for CompositedBy {
 
 #[derive(Component, Default)]
 #[relationship_target(relationship = CompositedBy)]
-pub struct CompositedViews(Vec<Entity>);
+pub struct Views(Vec<Entity>);
 
-impl<'a> IntoIterator for &'a CompositedViews {
+impl<'a> IntoIterator for &'a Views {
     type Item = Entity;
 
     type IntoIter = Copied<<&'a Vec<Entity> as IntoIterator>::IntoIter>;
@@ -64,13 +64,13 @@ impl<'a> IntoIterator for &'a CompositedViews {
     }
 }
 
-impl FromIterator<Entity> for CompositedViews {
+impl FromIterator<Entity> for Views {
     fn from_iter<T: IntoIterator<Item = Entity>>(iter: T) -> Self {
         Self(Vec::from_iter(iter))
     }
 }
 
-impl CompositedViews {
+impl Views {
     pub fn iter(&self) -> impl Iterator<Item = Entity> {
         self.into_iter()
     }
@@ -90,7 +90,7 @@ pub enum CompositorEvent {
 
 fn handle_compositor_events(
     trigger: Trigger<CompositorEvent>,
-    mut compositors: Query<(&mut Compositor, &RenderTarget, &CompositedViews)>,
+    mut compositors: Query<(&mut Compositor, &RenderTarget, &Views)>,
     mut views: Query<(&View, Option<&SubView>)>,
     primary_window: Option<Single<Entity, With<PrimaryWindow>>>,
     windows: Query<(Entity, &Window)>,
@@ -191,15 +191,9 @@ pub struct ExtractedCompositor {
 }
 
 pub(super) fn extract_compositors(
-    main_compoitors: Extract<
-        Query<(
-            &Compositor,
-            &CompositedViews,
-            &RenderGraphDriver,
-            &RenderEntity,
-        )>,
-    >,
+    main_compoitors: Extract<Query<(RenderEntity, &Compositor, &Views, &RenderGraphDriver)>>,
     render_compositors: Query<&mut ExtractedCompositor>,
+    main_views: Extract<Query<RenderEntity, With<View>>>,
     mut commands: Commands,
 ) {
 }
