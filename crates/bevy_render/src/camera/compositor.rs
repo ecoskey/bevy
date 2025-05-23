@@ -196,4 +196,5 @@ pub(super) fn extract_compositors(
     main_views: Extract<Query<RenderEntity, With<View>>>,
     mut commands: Commands,
 ) {
+    todo!()
 }
