@@ -38,12 +38,6 @@ use thiserror::Error;
 use tracing::warn;
 use wgpu::{BlendState, TextureUsages};
 
-/// Holds internally computed [`Camera`] values.
-#[derive(Default, Debug, Clone)]
-pub struct ComputedCameraValues {
-    clip_from_view: Mat4,
-}
-
 /// How much energy a `Camera3d` absorbs from incoming light.
 ///
 /// <https://en.wikipedia.org/wiki/Exposure_(photography)>
@@ -194,9 +188,8 @@ pub enum ViewportConversionError {
     Msaa
 )]
 pub struct Camera {
-    /// Computed values for this camera, such as the projection matrix and the render target size.
-    #[reflect(ignore, clone)]
-    pub computed: ComputedCameraValues,
+    /// If set, this camera will still render to its entire viewport, but its projection will
+    /// adjust to only render the specified [`SubRect`] of the total view.
     pub crop: Option<SubRect>,
     /// The blend state that will be used by the pipeline that writes the intermediate render textures to the final view target texture.
     #[reflect(ignore)]
@@ -206,12 +199,6 @@ pub struct Camera {
 }
 
 impl Camera {
-    /// The projection matrix computed using this camera's [`CameraProjection`].
-    #[inline]
-    pub fn clip_from_view(&self) -> Mat4 {
-        self.computed.clip_from_view
-    }
-
     /// Given a position in world space, use the camera to compute the viewport-space coordinates.
     ///
     /// To get the coordinates in Normalized Device Coordinates, you should use

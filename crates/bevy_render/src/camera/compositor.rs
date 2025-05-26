@@ -4,7 +4,7 @@ use bevy_ecs::{
     entity::{ContainsEntity, Entity},
     event::Event,
     observer::Trigger,
-    query::{Has, QueryEntityError, With},
+    query::{Has, QueryEntityError, With, Without},
     system::{Commands, Local, Query, Res, Single},
 };
 use bevy_image::Image;
@@ -49,7 +49,7 @@ impl ContainsEntity for CompositedBy {
 }
 
 //TODO: need to modify relationship hooks to trigger compositor events
-
+//TODO: make an analogue of `children!` that works for views
 #[derive(Component, Default)]
 #[relationship_target(relationship = CompositedBy)]
 pub struct Views(Vec<Entity>);
@@ -90,7 +90,7 @@ pub enum CompositorEvent {
 
 fn handle_compositor_events(
     trigger: Trigger<CompositorEvent>,
-    mut compositors: Query<(&mut Compositor, &RenderTarget, &Views)>,
+    mut compositors: Query<(&mut Compositor, &RenderTarget, &Views), Without<CompositedBy>>,
     mut views: Query<(&View, Option<&SubView>)>,
     primary_window: Option<Single<Entity, With<PrimaryWindow>>>,
     windows: Query<(Entity, &Window)>,
@@ -98,9 +98,7 @@ fn handle_compositor_events(
     manual_texture_views: Res<ManualTextureViews>,
     mut commands: Commands,
 ) {
-    let Ok((mut compositor, render_target, composited_views)) =
-        compositors.get_mut(trigger.target())
-    else {
+    let Ok((mut compositor, render_target, views)) = compositors.get_mut(trigger.target()) else {
         // events propagate up the compositor's tree, so the target may not be a compositor yet
         return;
     };
@@ -170,13 +168,15 @@ fn handle_compositor_events(
                 &manual_texture_views,
             );
 
-            composited_views.iter().for_each(|view| {
+            views.iter().for_each(|view| {
                 update_view(&compositor, view, views.reborrow(), commands.reborrow());
             });
         }
         CompositorEvent::ViewChanged(view) => {
             update_view(&compositor, view, views, commands);
         }
+        // this compositor
+        CompositorEvent::CompositorUpdated | CompositorEvent::ViewUpdated(_) => {}
     }
 }
 
@@ -196,5 +196,4 @@ pub(super) fn extract_compositors(
     main_views: Extract<Query<RenderEntity, With<View>>>,
     mut commands: Commands,
 ) {
-    todo!()
 }

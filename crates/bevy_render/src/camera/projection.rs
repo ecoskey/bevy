@@ -255,6 +255,25 @@ impl Projection {
     }
 }
 
+impl Default for Projection {
+    fn default() -> Self {
+        Projection::Perspective(Default::default())
+    }
+}
+
+/// Holds the projection matrix computed from an entity's [`Projection`] component.
+#[derive(Default, Debug, Component, Clone, Reflect)]
+#[reflect(Component, Clone)]
+pub struct ComputedProjection {
+    clip_from_view: Mat4,
+}
+
+impl ComputedProjection {
+    pub fn clip_from_view(&self) -> &Mat4 {
+        &self.clip_from_view
+    }
+}
+
 impl CameraProjection for Projection {
     fn get_clip_from_view(&self) -> Mat4 {
         match self {
@@ -294,12 +313,6 @@ impl CameraProjection for Projection {
             Projection::Orthographic(projection) => projection.get_frustum_corners(z_near, z_far),
             Projection::Custom(projection) => projection.get_frustum_corners(z_near, z_far),
         }
-    }
-}
-
-impl Default for Projection {
-    fn default() -> Self {
-        Projection::Perspective(Default::default())
     }
 }
 

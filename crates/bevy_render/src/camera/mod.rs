@@ -1,12 +1,12 @@
 mod camera;
 mod clear_color;
 mod compositor;
+mod compositor_graph;
 mod manual_texture_view;
 mod projection;
 mod render;
 mod render_target;
 mod view;
-mod compositor_graph;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_math::{CompassOctant, Rect, UVec2, Vec2};
@@ -57,8 +57,7 @@ impl Plugin for CameraPlugin {
             ));
 
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app
-                .add_systems(ExtractSchedule, extract_cameras)
+            render_app.add_systems(ExtractSchedule, extract_cameras);
             let camera_driver_node = CameraDriverNode::new(render_app.world_mut());
             let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
             render_graph.add_node(crate::graph::CameraDriverLabel, camera_driver_node);
@@ -116,4 +115,3 @@ fn warn_on_noop_view_render_graph(world: DeferredWorld, ctx: HookContext) {
         );
     }
 }
-
