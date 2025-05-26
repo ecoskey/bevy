@@ -53,7 +53,7 @@ use bevy::{
         },
         renderer::RenderContext,
         sync_world::MainEntity,
-        view::{ExtractedView, ExtractedViewTarget, RenderVisibleEntities, RetainedViewEntity},
+        view::{ExtractedView, MainCameraTextures, RenderVisibleEntities, RetainedViewEntity},
         Extract, Render, RenderApp, RenderDebugFlags, RenderSet,
     },
 };
@@ -581,7 +581,7 @@ impl ViewNode for CustomDrawNode {
     type ViewQuery = (
         &'static ExtractedCamera,
         &'static ExtractedView,
-        &'static ExtractedViewTarget,
+        &'static MainCameraTextures,
     );
 
     fn run<'w>(

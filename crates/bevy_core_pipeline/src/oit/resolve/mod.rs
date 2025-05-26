@@ -19,7 +19,7 @@ use bevy_render::{
         Shader, ShaderDefVal, ShaderStages, TextureFormat,
     },
     renderer::{RenderAdapter, RenderDevice},
-    view::{ExtractedView, ExtractedViewTarget, ViewUniform, ViewUniforms},
+    view::{ExtractedView, MainCameraTextures, ViewUniform, ViewUniforms},
     Render, RenderApp, RenderSet,
 };
 use tracing::warn;
@@ -204,7 +204,7 @@ fn specialize_oit_resolve_pipeline(
     resolve_pipeline: &OitResolvePipeline,
 ) -> RenderPipelineDescriptor {
     let format = if key.hdr {
-        ExtractedViewTarget::TEXTURE_FORMAT_HDR
+        MainCameraTextures::TEXTURE_FORMAT_HDR
     } else {
         TextureFormat::bevy_default()
     };

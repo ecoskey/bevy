@@ -27,7 +27,7 @@ use bevy::{
         },
         sync_component::SyncComponentPlugin,
         sync_world::{MainEntityHashMap, RenderEntity},
-        view::{ExtractedView, ExtractedViewTarget, RenderVisibleEntities},
+        view::{ExtractedView, MainCameraTextures, RenderVisibleEntities},
         Extract, Render, RenderApp, RenderSet,
     },
     sprite::{
@@ -157,7 +157,7 @@ impl SpecializedRenderPipeline for ColoredMesh2dPipeline {
             VertexBufferLayout::from_vertex_formats(VertexStepMode::Vertex, formats);
 
         let format = match key.contains(Mesh2dPipelineKey::HDR) {
-            true => ExtractedViewTarget::TEXTURE_FORMAT_HDR,
+            true => MainCameraTextures::TEXTURE_FORMAT_HDR,
             false => TextureFormat::bevy_default(),
         };
 
