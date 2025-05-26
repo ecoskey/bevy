@@ -61,18 +61,43 @@ fn trigger_view_changed(mut world: DeferredWorld, ctx: HookContext) {
 #[reflect(Clone, PartialEq, Default)]
 pub struct SubView {
     /// The sub-rectangle within which to render the view.
-    pub sub_rect: SubRect,
+    pub sub_rect: Option<SubRect>,
     /// The minimum and maximum depth to render (on a scale from 0.0 to 1.0).
     pub depth: Range<f32>,
 }
 
 impl SubView {
     pub fn get_viewport(&self, physical_size: UVec2) -> Viewport {
-        let viewport_rect = self.sub_rect.scaled_roughly_to(physical_size);
+        let viewport_rect = self
+            .sub_rect
+            .unwrap_or_default()
+            .scaled_roughly_to(physical_size);
         Viewport {
             physical_position: viewport_rect.offset.as_uvec2(),
             physical_size: viewport_rect.size,
             depth: self.depth.clone(),
+        }
+    }
+
+    fn on_insert(world: DeferredWorld, ctx: HookContext) {
+        let sub_view = world.entity(ctx.entity).get::<SubView>().unwrap();
+
+        //TODO: more general handling. Maybe defer to `Viewport`?
+
+        if sub_view
+            .sub_rect
+            .is_some_and(|sub_rect| sub_rect.is_empty())
+        {
+            warn!(
+                concat!(
+                    "{}Entity {} has a SubView component whose `size` or `full_size` are zero",
+                    "in at least one axis. All zero values will be reset to 1."
+                ),
+                ctx.caller
+                    .map(|location| format!("{location}: "))
+                    .unwrap_or_default(),
+                ctx.entity,
+            );
         }
     }
 }

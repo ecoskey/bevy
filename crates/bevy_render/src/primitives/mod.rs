@@ -320,6 +320,11 @@ impl SubRect {
             size: rect.max - rect.min,
         }
     }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.full_size.cmpeq(UVec2::ZERO).any() || self.size.cmpeq(UVec2::ZERO).any()
+    }
 }
 
 mod ops {
