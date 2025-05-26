@@ -23,7 +23,7 @@ use bevy_render::{
     render_resource::*,
     renderer::{RenderContext, RenderDevice},
     texture::{CachedTexture, TextureCache},
-    view::ExtractedViewTarget,
+    view::MainCameraTextures,
     Render, RenderApp, RenderSet,
 };
 use downsampling_pipeline::{
@@ -96,7 +96,7 @@ struct BloomNode;
 impl ViewNode for BloomNode {
     type ViewQuery = (
         &'static ExtractedCamera,
-        &'static ExtractedViewTarget,
+        &'static MainCameraTextures,
         &'static BloomTexture,
         &'static BloomBindGroups,
         &'static DynamicUniformIndex<BloomUniforms>,

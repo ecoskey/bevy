@@ -47,7 +47,7 @@ use bevy_render::{
     sync_world::{MainEntity, MainEntityHashMap},
     texture::{DefaultImageSampler, FallbackImage, GpuImage},
     view::{
-        ExtractedView, ExtractedViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+        ExtractedView, MainCameraTextures, ViewUniform, ViewUniformOffset, ViewUniforms,
         ViewVisibility,
     },
     Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
@@ -635,7 +635,7 @@ impl SpecializedMeshPipeline for Mesh2dPipeline {
         let vertex_buffer_layout = layout.0.get_layout(&vertex_attributes)?;
 
         let format = match key.contains(Mesh2dPipelineKey::HDR) {
-            true => ExtractedViewTarget::TEXTURE_FORMAT_HDR,
+            true => MainCameraTextures::TEXTURE_FORMAT_HDR,
             false => TextureFormat::bevy_default(),
         };
 

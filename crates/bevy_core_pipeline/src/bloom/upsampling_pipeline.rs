@@ -15,7 +15,7 @@ use bevy_render::{
         *,
     },
     renderer::RenderDevice,
-    view::ExtractedViewTarget,
+    view::MainCameraTextures,
 };
 
 #[derive(Component)]
@@ -68,7 +68,7 @@ impl SpecializedRenderPipeline for BloomUpsamplingPipeline {
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let texture_format = if key.final_pipeline {
-            ExtractedViewTarget::TEXTURE_FORMAT_HDR
+            MainCameraTextures::TEXTURE_FORMAT_HDR
         } else {
             BLOOM_TEXTURE_FORMAT
         };

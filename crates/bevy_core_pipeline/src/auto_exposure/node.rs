@@ -16,7 +16,7 @@ use bevy_render::{
     render_resource::*,
     renderer::RenderContext,
     texture::{FallbackImage, GpuImage},
-    view::{ExtractedView, ExtractedViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms},
+    view::{ExtractedView, MainCameraTextures, ViewUniform, ViewUniformOffset, ViewUniforms},
 };
 
 #[derive(RenderLabel, Debug, Clone, Hash, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub struct AutoExposure;
 pub struct AutoExposureNode {
     query: QueryState<(
         Read<ViewUniformOffset>,
-        Read<ExtractedViewTarget>,
+        Read<MainCameraTextures>,
         Read<ViewAutoExposurePipeline>,
         Read<ExtractedView>,
     )>,

@@ -556,7 +556,7 @@ pub struct ViewUniformOffset {
 }
 
 #[derive(Component)]
-pub struct ViewTarget {
+pub struct MainCameraTextures {
     main_textures: MainTargetTextures,
     main_texture_format: TextureFormat,
     /// 0 represents `main_textures.a`, 1 represents `main_textures.b`
@@ -673,7 +673,7 @@ pub struct NoIndirectDrawing;
 #[derive(Component, Default)]
 pub struct NoCpuCulling;
 
-impl ViewTarget {
+impl MainCameraTextures {
     pub const TEXTURE_FORMAT_HDR: TextureFormat = TextureFormat::Rgba16Float;
 
     /// Retrieve this target's main texture's color attachment.
