@@ -268,9 +268,13 @@ pub struct ComputedProjection {
     clip_from_view: Mat4,
 }
 
+//TODO: add observers to handle updating projection on views changing
+// or, since all parts of cameras can be mutated freely, maybe this part is better to keep in a
+// post-update system? still, want to split up camera_system.
+
 impl ComputedProjection {
-    pub fn clip_from_view(&self) -> &Mat4 {
-        &self.clip_from_view
+    pub fn clip_from_view(&self) -> Mat4 {
+        self.clip_from_view
     }
 }
 

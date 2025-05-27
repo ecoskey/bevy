@@ -18,9 +18,7 @@ use crate::{
     view::ExtractedWindows,
 };
 
-use super::{
-    Compositor, CompositorEvent, CompositorEventType, ManualTextureViewHandle, ManualTextureViews,
-};
+use super::{Compositor, CompositorEvent, ManualTextureViewHandle, ManualTextureViews};
 
 /// Information about the current [`RenderTarget`].
 #[derive(Default, Debug, Clone)]
@@ -51,23 +49,11 @@ pub enum RenderTarget {
 
 impl RenderTarget {
     fn on_insert(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::RenderTargetChanged,
-            },
-            ctx.entity,
-        );
+        world.trigger_targets(CompositorEvent::CompositorChanged, ctx.entity);
     }
 
     fn on_remove(mut world: DeferredWorld, ctx: HookContext) {
-        world.trigger_targets(
-            CompositorEvent {
-                source: ctx.entity,
-                ty: CompositorEventType::RenderTargetChanged,
-            },
-            ctx.entity,
-        );
+        world.trigger_targets(CompositorEvent::CompositorChanged, ctx.entity);
 
         if world
             .get_entity(ctx.entity)

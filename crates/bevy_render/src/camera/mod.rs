@@ -1,7 +1,6 @@
 mod camera;
 mod clear_color;
 mod compositor;
-mod compositor_graph;
 mod manual_texture_view;
 mod projection;
 mod render;
@@ -9,7 +8,6 @@ mod render_target;
 mod view;
 
 use bevy_derive::{Deref, DerefMut};
-use bevy_math::{CompassOctant, Rect, UVec2, Vec2};
 use bevy_reflect::Reflect;
 pub use camera::*;
 pub use clear_color::*;
@@ -24,14 +22,13 @@ pub use view::*;
 use crate::{
     extract_component::ExtractComponentPlugin,
     extract_resource::ExtractResourcePlugin,
-    render_graph::{InternedRenderSubGraph, RenderGraph, RenderSubGraph},
-    ExtractSchedule, Render, RenderApp, RenderSystems,
+    render_graph::{InternedRenderSubGraph, RenderGraphApp, RenderSubGraph},
+    RenderApp,
 };
 use bevy_app::{App, Plugin};
 use bevy_ecs::{
     component::{Component, HookContext},
     reflect::ReflectComponent,
-    schedule::IntoScheduleConfigs,
     world::DeferredWorld,
 };
 
@@ -56,12 +53,17 @@ impl Plugin for CameraPlugin {
                 ExtractComponentPlugin::<CameraMainTextureUsages>::default(),
             ));
 
-        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app.add_systems(ExtractSchedule, extract_cameras);
-            let camera_driver_node = CameraDriverNode::new(render_app.world_mut());
-            let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
-            render_graph.add_node(crate::graph::CameraDriverLabel, camera_driver_node);
-        }
+        // if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+        //     render_app.add_systems(ExtractSchedule, extract_cameras);
+        //     let camera_driver_node = CameraDriverNode::new(render_app.world_mut());
+        //     let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
+        //     render_graph.add_node(crate::graph::CameraDriverLabel, camera_driver_node);
+        // }
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app.add_render_sub_graph(NoopRenderGraph);
     }
 }
 
@@ -94,7 +96,7 @@ impl Default for RenderGraphDriver {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderSubGraph)]
-pub struct NoopRenderGraph;
+struct NoopRenderGraph;
 
 fn warn_on_noop_view_render_graph(world: DeferredWorld, ctx: HookContext) {
     if world

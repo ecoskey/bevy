@@ -20,8 +20,8 @@ use crate::{
 };
 
 use super::{
-    ManualTextureViews, NormalizedRenderTarget, RenderGraphDriver, RenderTarget, RenderTargetInfo,
-    SubView, View, ViewTarget,
+    render::CompositorGraph, ManualTextureViews, NormalizedRenderTarget, RenderGraphDriver,
+    RenderTarget, RenderTargetInfo, SubView, View, ViewTarget,
 };
 
 // -----------------------------------------------------------------------------
@@ -31,7 +31,7 @@ use super::{
 #[require(
     RenderTarget,
     Views,
-    RenderGraphDriver::new(SimpleCompositorGraph),
+    RenderGraphDriver::new(CompositorGraph),
     SyncToRenderWorld
 )]
 pub struct Compositor {
@@ -98,7 +98,9 @@ fn handle_compositor_events(
     manual_texture_views: Res<ManualTextureViews>,
     mut commands: Commands,
 ) {
-    let Ok((mut compositor, render_target, views)) = compositors.get_mut(trigger.target()) else {
+    let Ok((mut compositor, render_target, composited_views)) =
+        compositors.get_mut(trigger.target())
+    else {
         // events propagate up the compositor's tree, so the target may not be a compositor yet
         return;
     };
@@ -168,15 +170,13 @@ fn handle_compositor_events(
                 &manual_texture_views,
             );
 
-            views.iter().for_each(|view| {
+            composited_views.iter().for_each(|view| {
                 update_view(&compositor, view, views.reborrow(), commands.reborrow());
             });
         }
         CompositorEvent::ViewChanged(view) => {
             update_view(&compositor, view, views, commands);
-        }
-        // this compositor
-        CompositorEvent::CompositorUpdated | CompositorEvent::ViewUpdated(_) => {}
+        } // this compositor
     }
 }
 
