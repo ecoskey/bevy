@@ -1,23 +1,13 @@
 mod camera;
 mod clear_color;
-mod compositor;
-mod manual_texture_view;
 mod projection;
-mod render;
-mod render_target;
-mod view;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_reflect::Reflect;
 pub use camera::*;
 pub use clear_color::*;
-pub use compositor::*;
-pub use manual_texture_view::*;
 pub use projection::*;
-pub use render::*;
-pub use render_target::*;
 use tracing::warn;
-pub use view::*;
 
 use crate::{
     extract_component::ExtractComponentPlugin,
@@ -39,7 +29,6 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Camera>()
             .register_type::<ClearColor>()
-            .register_type::<RenderGraphDriver>()
             .register_type::<CameraMainTextureUsages>()
             .register_type::<Exposure>()
             .register_type::<TemporalJitter>()
@@ -61,10 +50,7 @@ impl Plugin for CameraPlugin {
         // }
     }
 
-    fn finish(&self, app: &mut App) {
-        let render_app = app.sub_app_mut(RenderApp);
-        render_app.add_render_sub_graph(NoopRenderGraph);
-    }
+    fn finish(&self, app: &mut App) {}
 }
 
 /// Configures the [`RenderGraph`](crate::render_graph::RenderGraph) name assigned to be run for a given entity.

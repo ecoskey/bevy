@@ -25,6 +25,7 @@ extern crate self as bevy_render;
 pub mod alpha;
 pub mod batching;
 pub mod camera;
+pub mod composition;
 pub mod diagnostic;
 pub mod experimental;
 pub mod extract_component;
@@ -48,7 +49,6 @@ pub mod storage;
 pub mod sync_component;
 pub mod sync_world;
 pub mod texture;
-pub mod view;
 
 /// The render prelude.
 ///

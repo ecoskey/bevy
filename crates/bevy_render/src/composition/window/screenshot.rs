@@ -1,6 +1,7 @@
 use super::ExtractedWindows;
 use crate::{
     camera::{ManualTextureViewHandle, ManualTextureViews, NormalizedRenderTarget, RenderTarget},
+    composition::{NormalizedRenderTarget, RenderTarget},
     gpu_readback,
     prelude::Shader,
     render_asset::{RenderAssetUsages, RenderAssets},
