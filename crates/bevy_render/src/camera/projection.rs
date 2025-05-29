@@ -1,9 +1,6 @@
 use core::fmt::Debug;
 
-use crate::{
-    primitives::{Frustum, SubRect},
-    view::VisibilitySystems,
-};
+use crate::primitives::{Frustum, SubRect};
 use bevy_app::{App, Plugin, PostStartup, PostUpdate};
 use bevy_asset::AssetEventSystems;
 use bevy_derive::{Deref, DerefMut};
