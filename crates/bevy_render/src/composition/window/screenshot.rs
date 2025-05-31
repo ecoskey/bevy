@@ -1,7 +1,10 @@
 use super::ExtractedWindows;
 use crate::{
     camera::{ManualTextureViewHandle, ManualTextureViews, NormalizedRenderTarget, RenderTarget},
-    composition::{NormalizedRenderTarget, RenderTarget},
+    composition::{
+        manual_texture_view::ManualTextureViews, prepare_view_attachments, prepare_view_targets,
+        NormalizedRenderTarget, RenderTarget, ViewTargetAttachments, WindowSurfaces,
+    },
     gpu_readback,
     prelude::Shader,
     render_asset::{RenderAssetUsages, RenderAssets},
@@ -13,7 +16,6 @@ use crate::{
     },
     renderer::RenderDevice,
     texture::{GpuImage, OutputColorAttachment},
-    view::{prepare_view_attachments, prepare_view_targets, ViewTargetAttachments, WindowSurfaces},
     ExtractSchedule, MainWorld, Render, RenderApp, RenderSystems,
 };
 use alloc::{borrow::Cow, sync::Arc};

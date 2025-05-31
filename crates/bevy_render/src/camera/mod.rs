@@ -8,7 +8,8 @@ pub use camera::*;
 pub use clear_color::*;
 pub use projection::*;
 use tracing::warn;
-pub mod visibility;
+mod visibility;
+pub use visibility::*;
 
 use crate::{
     extract_component::ExtractComponentPlugin,
