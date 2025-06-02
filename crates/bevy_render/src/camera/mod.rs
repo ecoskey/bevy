@@ -1,6 +1,8 @@
 mod camera;
 mod clear_color;
 mod projection;
+mod view;
+mod visibility;
 
 use bevy_derive::{Deref, DerefMut};
 use bevy_reflect::Reflect;
@@ -8,7 +10,7 @@ pub use camera::*;
 pub use clear_color::*;
 pub use projection::*;
 use tracing::warn;
-mod visibility;
+pub use view::*;
 pub use visibility::*;
 
 use crate::{

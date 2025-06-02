@@ -1,15 +1,25 @@
 use bevy_ecs::{
     component::{Component, HookContext},
+    entity::Entity,
+    query::With,
+    system::{Commands, Query, Single},
     world::DeferredWorld,
 };
 use bevy_math::{Rect, URect, UVec2, UVec4, Vec2};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
+use bevy_transform::components::GlobalTransform;
+use bevy_window::PrimaryWindow;
 use tracing::warn;
 
 use core::ops::Range;
 use std::sync::Arc;
 
-use crate::{primitives::SubRect, sync_world::SyncToRenderWorld};
+use crate::{
+    primitives::SubRect,
+    render_graph::InternedRenderSubGraph,
+    sync_world::{RenderEntity, SyncToRenderWorld},
+    Extract,
+};
 
 use super::{
     CompositedBy, CompositorEvent, NormalizedRenderTarget, RenderGraphDriver, RenderTargetInfo,
@@ -306,40 +316,39 @@ impl ViewTarget {
 pub struct ExtractedView {
     /// The entity in the main world corresponding to this render world view.
     pub retained_view_entity: RetainedViewEntity,
+    pub render_graph: InternedRenderSubGraph,
     /// The render target entity associated with this View
-    pub target: Option<NormalizedRenderTarget>,
+    pub target: NormalizedRenderTarget,
     pub physical_viewport_size: Option<UVec2>,
     pub physical_target_size: Option<UVec2>,
     // uvec4(origin.x, origin.y, width, height)
     pub viewport: Option<UVec4>,
-    pub render_graph: InternedRenderSubGraph,
 }
 
-pub fn extract_view(
+pub fn extract_views(
     mut commands: Commands,
-    query: Extract<
+    views: Extract<
         Query<(
             Entity,
             RenderEntity,
             &View,
+            Option<&ViewTarget>,
             &RenderGraphDriver,
-            &Camera,
-            &GlobalTransform,
-            &VisibleEntities,
-            &Frustum,
-            Has<Hdr>,
-            Option<&ColorGrading>,
-            Option<&Exposure>,
-            Option<&TemporalJitter>,
-            Option<&RenderLayers>,
-            Option<&Projection>,
-            Has<NoIndirectDrawing>,
         )>,
     >,
-    primary_window: Extract<Query<Entity, With<PrimaryWindow>>>,
-    gpu_preprocessing_support: Res<GpuPreprocessingSupport>,
+    primary_window: Extract<Option<Single<Entity, With<PrimaryWindow>>>>,
     mapper: Extract<Query<&RenderEntity>>,
 ) {
+    for (entity, render_entity, view, view_target, view_render_graph) in &views {
+        let extracted_view = view_target.map(|view_target| ExtractedView {
+            retained_view_entity: RetainedViewEntity::new(main_entity.into(), None, 0),
+            render_graph: *view_render_graph,
+            target: view_target.target.0.clone(),
+            physical_viewport_size: ,
+            physical_target_size: todo!(),
+            viewport: todo!(),
+        });
+    }
     // let primary_window = primary_window.iter().next();
     // for (
     //     main_entity,

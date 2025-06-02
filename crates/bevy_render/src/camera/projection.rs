@@ -11,6 +11,8 @@ use bevy_transform::{components::GlobalTransform, TransformSystems};
 use derive_more::derive::From;
 use serde::{Deserialize, Serialize};
 
+use super::Camera;
+
 /// Adds [`Camera`](crate::camera::Camera) driver systems for a given projection type.
 ///
 /// If you are using `bevy_pbr`, then you need to add `PbrProjectionPlugin` along with this.
@@ -225,6 +227,7 @@ impl CustomProjection {
 ///
 /// [`Camera`]: crate::camera::Camera
 #[derive(Component, Debug, Clone, Reflect, From)]
+#[require(ComputedProjection)]
 #[reflect(Component, Default, Debug, Clone)]
 pub enum Projection {
     Perspective(PerspectiveProjection),
@@ -262,8 +265,11 @@ impl Default for Projection {
 #[derive(Default, Debug, Component, Clone, Reflect)]
 #[reflect(Component, Clone)]
 pub struct ComputedProjection {
+    prev_crop: Option<SubRect>,
     clip_from_view: Mat4,
 }
+
+fn update_projections(cameras: Query<(&Camera, &Projection, &mut ComputedProjection)>) {}
 
 //TODO: add observers to handle updating projection on views changing
 // or, since all parts of cameras can be mutated freely, maybe this part is better to keep in a
