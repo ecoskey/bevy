@@ -1,3 +1,8 @@
+mod window;
+mod manual_texture_view;
+pub use window::*;
+pub use manual_texture_view::*;
+
 use bevy_asset::{AssetId, Assets, Handle};
 use bevy_ecs::{
     component::{Component, HookContext},
@@ -16,8 +21,8 @@ use wgpu::TextureFormat;
 use crate::{render_asset::RenderAssets, render_resource::TextureView, texture::GpuImage};
 
 use super::{
-    manual_texture_view::ManualTextureViewHandle, window::ExtractedWindows, Compositor,
-    CompositorEvent, ManualTextureViews,
+    Compositor,
+    CompositorEvent,
 };
 
 /// Information about the current [`RenderTarget`].

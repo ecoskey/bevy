@@ -1,9 +1,8 @@
-use super::ExtractedWindows;
+use super::{ExtractedWindows, WindowSurfaces};
 use crate::{
-    camera::{ManualTextureViewHandle, ManualTextureViews, NormalizedRenderTarget, RenderTarget},
-    composition::{
-        manual_texture_view::ManualTextureViews, prepare_view_attachments, prepare_view_targets,
-        NormalizedRenderTarget, RenderTarget, ViewTargetAttachments, WindowSurfaces,
+    camera::ViewTargetAttachments,
+    composition::render_target::{
+        ManualTextureViewHandle, ManualTextureViews, NormalizedRenderTarget, RenderTarget,
     },
     gpu_readback,
     prelude::Shader,

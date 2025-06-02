@@ -1,9 +1,7 @@
 mod compositor;
-pub mod manual_texture_view;
 mod render;
-mod render_target;
+pub mod render_target;
 mod view;
-pub mod window;
 
 use bevy_app::{App, Plugin};
 use bevy_derive::{Deref, DerefMut};
@@ -15,8 +13,7 @@ use bevy_ecs::{
 use bevy_reflect::Reflect;
 
 pub use compositor::*;
-use manual_texture_view::ManualTextureViews;
-pub use render_target::*;
+use render_target::ManualTextureViews;
 use tracing::warn;
 pub use view::*;
 
