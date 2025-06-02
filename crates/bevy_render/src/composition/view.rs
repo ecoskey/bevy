@@ -7,7 +7,6 @@ use bevy_ecs::{
 };
 use bevy_math::{Rect, URect, UVec2, UVec4, Vec2};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
-use bevy_transform::components::GlobalTransform;
 use bevy_window::PrimaryWindow;
 use tracing::warn;
 
@@ -15,6 +14,7 @@ use core::ops::Range;
 use std::sync::Arc;
 
 use crate::{
+    camera::RetainedViewEntity,
     primitives::SubRect,
     render_graph::InternedRenderSubGraph,
     sync_world::{RenderEntity, SyncToRenderWorld},
@@ -22,7 +22,8 @@ use crate::{
 };
 
 use super::{
-    CompositedBy, CompositorEvent, NormalizedRenderTarget, RenderGraphDriver, RenderTargetInfo,
+    render_target::{NormalizedRenderTarget, RenderTargetInfo},
+    CompositedBy, CompositorEvent, RenderGraphDriver,
 };
 
 #[derive(Copy, Clone, Default, Debug, Component, Reflect)]
@@ -319,7 +320,6 @@ pub struct ExtractedView {
     pub render_graph: InternedRenderSubGraph,
     /// The render target entity associated with this View
     pub target: NormalizedRenderTarget,
-    pub physical_viewport_size: Option<UVec2>,
     pub physical_target_size: Option<UVec2>,
     // uvec4(origin.x, origin.y, width, height)
     pub viewport: Option<UVec4>,
@@ -339,14 +339,13 @@ pub fn extract_views(
     primary_window: Extract<Option<Single<Entity, With<PrimaryWindow>>>>,
     mapper: Extract<Query<&RenderEntity>>,
 ) {
-    for (entity, render_entity, view, view_target, view_render_graph) in &views {
+    for (main_entity, render_entity, view, view_target, view_render_graph) in &views {
         let extracted_view = view_target.map(|view_target| ExtractedView {
             retained_view_entity: RetainedViewEntity::new(main_entity.into(), None, 0),
             render_graph: *view_render_graph,
             target: view_target.target.0.clone(),
-            physical_viewport_size: ,
-            physical_target_size: todo!(),
             viewport: todo!(),
+            physical_target_size: todo!(),
         });
     }
     // let primary_window = primary_window.iter().next();

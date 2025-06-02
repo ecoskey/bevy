@@ -1,8 +1,7 @@
 use crate::{
-    camera::{ClearColor, ExtractedCamera, NormalizedRenderTarget},
+    camera::{ClearColor, ExtractedCamera},
     render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, RenderSubGraph},
     renderer::RenderContext,
-    view::ExtractedWindows,
 };
 use bevy_ecs::{
     entity::ContainsEntity, prelude::QueryState, system::lifetimeless::Read, world::World,
@@ -10,7 +9,7 @@ use bevy_ecs::{
 use bevy_platform::collections::HashSet;
 use wgpu::{LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp};
 
-use super::{CompositedBy, Compositor, RenderGraphDriver, Views};
+use super::{CompositedBy, Compositor, ExtractedView, RenderGraphDriver, Views};
 
 pub struct RunCompositorsNode {}
 
@@ -39,14 +38,14 @@ impl RenderViewsNode {
     pub fn new(world: &mut World) -> Self {
         Self {
             compositors: world.query(),
-            cameras: world.query(),
+            views: world.query(),
         }
     }
 }
 
 impl Node for RenderViewsNode {
     fn update(&mut self, world: &mut World) {
-        self.cameras.update_archetypes(world);
+        self.views.update_archetypes(world);
     }
     fn run(
         &self,

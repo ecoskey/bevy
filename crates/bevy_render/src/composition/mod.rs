@@ -1,5 +1,5 @@
 mod compositor;
-mod render;
+pub mod render;
 pub mod render_target;
 mod view;
 
