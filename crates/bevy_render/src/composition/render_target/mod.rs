@@ -1,7 +1,8 @@
-mod window;
 mod manual_texture_view;
-pub use window::*;
+mod window;
+use bevy_app::{App, Plugin};
 pub use manual_texture_view::*;
+pub use window::*;
 
 use bevy_asset::{AssetId, Assets, Handle};
 use bevy_ecs::{
@@ -18,12 +19,23 @@ use derive_more::derive::From;
 use tracing::warn;
 use wgpu::TextureFormat;
 
-use crate::{render_asset::RenderAssets, render_resource::TextureView, texture::GpuImage};
-
-use super::{
-    Compositor,
-    CompositorEvent,
+use crate::{
+    extract_resource::ExtractResourcePlugin, render_asset::RenderAssets,
+    render_resource::TextureView, texture::GpuImage,
 };
+
+use super::{Compositor, CompositorEvent};
+
+pub struct RenderTargetPlugin;
+
+impl Plugin for RenderTargetPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ManualTextureViews>().add_plugins((
+            WindowRenderPlugin,
+            ExtractResourcePlugin::<ManualTextureViews>::default(),
+        ));
+    }
+}
 
 /// Information about the current [`RenderTarget`].
 #[derive(Default, Debug, Clone)]

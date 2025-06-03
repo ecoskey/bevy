@@ -13,12 +13,11 @@ use bevy_ecs::{
 use bevy_reflect::Reflect;
 
 pub use compositor::*;
-use render_target::ManualTextureViews;
+use render_target::{ManualTextureViews, RenderTargetPlugin};
 use tracing::warn;
 pub use view::*;
 
 use crate::{
-    extract_resource::ExtractResourcePlugin,
     render_graph::{InternedRenderSubGraph, RenderGraphApp, RenderSubGraph},
     RenderApp,
 };
@@ -28,14 +27,12 @@ pub struct CompositionPlugin;
 impl Plugin for CompositionPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<RenderGraphDriver>()
-            .init_resource::<ManualTextureViews>();
-
-        app.add_plugins(ExtractResourcePlugin::<ManualTextureViews>::default());
+            .add_plugins(RenderTargetPlugin);
     }
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        render_app.add_render_sub_graph(NoopRenderGraph);
+        render_app.add_render_sub_graph(NoopRenderGraph).
     }
 }
 

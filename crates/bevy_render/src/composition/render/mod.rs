@@ -1,3 +1,8 @@
+mod compositor;
+mod view;
+pub use compositor::*;
+pub use view::*;
+
 use crate::{
     camera::{ClearColor, ExtractedCamera},
     render_graph::{Node, NodeRunError, RenderGraphContext, RenderLabel, RenderSubGraph},
@@ -10,8 +15,6 @@ use bevy_platform::collections::HashSet;
 use wgpu::{LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp};
 
 use super::{CompositedBy, Compositor, ExtractedView, RenderGraphDriver, Views};
-
-pub struct RunCompositorsNode {}
 
 // TODO:
 // - [ ] setup compositor graph structure, and defer to view render graph

@@ -62,7 +62,7 @@ impl<'a> IntoIterator for &'a Views {
     type IntoIter = Copied<<&'a Vec<Entity> as IntoIterator>::IntoIter>;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.0).into_iter().copied()
+        self.0.iter().copied()
     }
 }
 
