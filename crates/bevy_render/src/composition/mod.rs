@@ -1,5 +1,4 @@
 mod compositor;
-pub mod render;
 pub mod render_target;
 mod view;
 
@@ -21,6 +20,16 @@ use crate::{
     render_graph::{InternedRenderSubGraph, RenderGraphApp, RenderSubGraph},
     RenderApp,
 };
+
+// TODO:
+// - [ ] setup compositor graph structure, and defer to view render graph
+// - [ ] extraction and such
+// - [x] module structure. This all probably shouldn't still live in `Camera`.
+// - [x] move `ComputedCameraValues` around. merge with Frustum?
+// - [ ] investigate utility camera query data
+// - [ ] fix event dispatch
+// - [ ] fix relationship hooks
+// - [ ] fix everything else oh god
 
 pub struct CompositionPlugin;
 
