@@ -11,7 +11,7 @@ use bevy_window::PrimaryWindow;
 use tracing::warn;
 
 use core::ops::Range;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use crate::{
     camera::RetainedViewEntity,
@@ -342,7 +342,7 @@ pub fn extract_views(
     for (main_entity, render_entity, view, view_target, view_render_graph) in &views {
         let extracted_view = view_target.map(|view_target| ExtractedView {
             retained_view_entity: RetainedViewEntity::new(main_entity.into(), None, 0),
-            render_graph: *view_render_graph,
+            render_graph: **view_render_graph,
             target: view_target.target.0.clone(),
             viewport: todo!(),
             physical_target_size: todo!(),

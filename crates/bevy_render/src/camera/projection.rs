@@ -28,19 +28,20 @@ impl Plugin for CameraProjectionPlugin {
             .add_systems(
                 PostStartup,
                 crate::camera::camera_system.in_set(CameraUpdateSystems),
-            )
-            .add_systems(
-                PostUpdate,
-                (
-                    crate::camera::camera_system
-                        .in_set(CameraUpdateSystems)
-                        .before(AssetEventSystems),
-                    crate::view::update_frusta
-                        .in_set(VisibilitySystems::UpdateFrusta)
-                        .after(crate::camera::camera_system)
-                        .after(TransformSystems::Propagate),
-                ),
             );
+        /* TODO: ORDERING CONSTRAINTS
+        .add_systems(
+            PostUpdate,
+            (
+                crate::camera::camera_system
+                    .in_set(CameraUpdateSystems)
+                    .before(AssetEventSystems),
+                crate::view::update_frusta
+                    .in_set(VisibilitySystems::UpdateFrusta)
+                    .after(crate::camera::camera_system)
+                    .after(TransformSystems::Propagate),
+            ),
+        );*/
     }
 }
 

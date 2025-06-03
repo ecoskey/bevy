@@ -1,5 +1,5 @@
 use crate::{
-    camera::{self, Visibility, VisibilityClass},
+    camera::{Visibility, VisibilityClass},
     mesh::Mesh,
 };
 use bevy_asset::{AsAssetId, AssetEvent, AssetId, Handle};
@@ -43,7 +43,7 @@ use derive_more::derive::From;
 #[derive(Component, Clone, Debug, Default, Deref, DerefMut, Reflect, PartialEq, Eq, From)]
 #[reflect(Component, Default, Clone, PartialEq)]
 #[require(Transform, Visibility, VisibilityClass)]
-#[component(on_add = view::add_visibility_class::<Mesh2d>)]
+#[component(on_add = crate::camera::add_visibility_class::<Mesh2d>)]
 pub struct Mesh2d(pub Handle<Mesh>);
 
 impl From<Mesh2d> for AssetId<Mesh> {

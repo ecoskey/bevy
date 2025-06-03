@@ -14,14 +14,16 @@ use core::iter::Copied;
 use tracing::warn;
 
 use crate::{
+    composition::ViewTarget,
     render_graph::{InternedRenderSubGraph, RenderSubGraph},
     sync_world::{RenderEntity, SyncToRenderWorld},
     Extract,
 };
 
 use super::{
-    render::CompositorGraph, ManualTextureViews, NormalizedRenderTarget, RenderGraphDriver,
-    RenderTarget, RenderTargetInfo, SubView, View, ViewTarget,
+    render::CompositorGraph,
+    render_target::{ManualTextureViews, NormalizedRenderTarget, RenderTarget, RenderTargetInfo},
+    RenderGraphDriver, SubView, View,
 };
 
 // -----------------------------------------------------------------------------

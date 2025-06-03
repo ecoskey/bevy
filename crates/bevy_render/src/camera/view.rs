@@ -10,6 +10,7 @@ use crate::{
         CameraMainTextureUsages, ClearColor, ClearColorConfig, Exposure, ExtractedCamera,
         ManualTextureViews, MipBias, NormalizedRenderTarget, TemporalJitter,
     },
+    composition::ViewTarget,
     extract_component::ExtractComponentPlugin,
     load_shader_library,
     primitives::Frustum,
@@ -766,7 +767,7 @@ impl MainCameraTextures {
     /// Returns `true` if and only if the main texture is [`Self::TEXTURE_FORMAT_HDR`]
     #[inline]
     pub fn is_hdr(&self) -> bool {
-        self.main_texture_format == ViewTarget::TEXTURE_FORMAT_HDR
+        self.main_texture_format == MainCameraTextures::TEXTURE_FORMAT_HDR
     }
 
     /// The final texture this view will render to.

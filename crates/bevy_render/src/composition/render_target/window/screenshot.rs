@@ -424,8 +424,10 @@ impl Plugin for ScreenshotPlugin {
                 .add_systems(
                     Render,
                     prepare_screenshots
+                        /* TODO: MAKE SURE ORDERING IS CORRECT AFTER THESE ARE REPLACED
                         .after(prepare_view_attachments)
                         .before(prepare_view_targets)
+                        */
                         .in_set(RenderSystems::ManageViews),
                 );
         }
