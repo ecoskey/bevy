@@ -1,5 +1,5 @@
 use crate::{
-    camera::{Visibility, VisibilityClass},
+    camera::{self, Visibility, VisibilityClass},
     mesh::Mesh,
 };
 use bevy_asset::{AsAssetId, AssetEvent, AssetId, Handle};
@@ -99,7 +99,7 @@ impl AsAssetId for Mesh2d {
 #[derive(Component, Clone, Debug, Default, Deref, DerefMut, Reflect, PartialEq, Eq, From)]
 #[reflect(Component, Default, Clone, PartialEq)]
 #[require(Transform, Visibility, VisibilityClass)]
-#[component(on_add = view::add_visibility_class::<Mesh3d>)]
+#[component(on_add = camera::add_visibility_class::<Mesh3d>)]
 pub struct Mesh3d(pub Handle<Mesh>);
 
 impl From<Mesh3d> for AssetId<Mesh> {

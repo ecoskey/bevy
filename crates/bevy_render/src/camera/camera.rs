@@ -3,18 +3,15 @@
     reason = "The parent module contains all things viewport-related, while this module handles cameras as a component. However, a rename/refactor which should clear up this lint is being discussed; see #17196."
 )]
 use super::{
-    ClearColorConfig, ComputedProjection, Projection, RenderGraphDriver, View, ViewTarget,
+    ClearColorConfig, ColorGrading, ComputedProjection, Hdr, Msaa, NoIndirectDrawing, Projection,
+    RenderLayers, Visibility, VisibleEntities,
 };
 use crate::{
     batching::gpu_preprocessing::{GpuPreprocessingMode, GpuPreprocessingSupport},
-    composition::{manual_texture_view::ManualTextureViews, ViewTarget},
+    composition::{render_target::ManualTextureViews, RenderGraphDriver, View, ViewTarget},
     primitives::{Frustum, SubRect},
     render_phase::Rangefinder3d,
     sync_world::RenderEntity,
-    view::{
-        ColorGrading, ExtractedView, ExtractedWindows, Hdr, Msaa, NoIndirectDrawing, RenderLayers,
-        RenderVisibleEntities, RetainedViewEntity, ViewUniformOffset, Visibility, VisibleEntities,
-    },
     Extract,
 };
 use bevy_asset::{AssetEvent, AssetId, Assets};
