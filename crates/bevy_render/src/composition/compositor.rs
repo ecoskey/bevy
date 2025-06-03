@@ -12,14 +12,16 @@ use bevy_ecs::{
 use bevy_image::Image;
 use bevy_platform::sync::Arc;
 use bevy_window::{PrimaryWindow, Window};
-use core::iter::Copied;
+use core::{iter::Copied, ops::Deref};
 
 use crate::{
     render_graph::{
-        InternedRenderSubGraph, Node, NodeRunError, RenderGraphContext, RenderSubGraph,
+        InternedRenderSubGraph, Node, NodeRunError, RenderGraphContext, RenderLabel,
+        RenderSubGraph, ViewNode,
     },
     render_resource::{
-        LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
+        LoadOp, Operations, RenderPassColorAttachment, RenderPassDescriptor, StoreOp, Texture,
+        TextureView,
     },
     renderer::RenderContext,
     sync_world::{RenderEntity, SyncToRenderWorld},
@@ -28,7 +30,7 @@ use crate::{
 
 use super::{
     render_target::{ExtractedWindows, NormalizedRenderTarget, RenderTarget, RenderTargetInfo},
-    ManualTextureViews, RenderGraphDriver, SubView, View, ViewTarget,
+    ExtractedView, ManualTextureViews, RenderGraphDriver, SubView, View, ViewTarget,
 };
 
 // -----------------------------------------------------------------------------
@@ -194,7 +196,6 @@ fn handle_compositor_events(
 pub struct ExtractedCompositor {
     views: Vec<Entity>,
     target: Arc<(NormalizedRenderTarget, RenderTargetInfo)>,
-    render_graph: InternedRenderSubGraph,
 }
 
 pub(super) fn extract_compositors(
@@ -206,14 +207,13 @@ pub(super) fn extract_compositors(
     todo!()
 }
 
+pub struct MainCompositorTexture(Texture);
+
 // -----------------------------------------------------------------------------
 // Render Graph
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderSubGraph)]
-pub struct CompositorGraph;
-
 pub struct RunCompositorsNode {
-    compositors: QueryState<(Entity, Read<ExtractedCompositor>)>,
+    compositors: QueryState<(Entity, Read<ExtractedCompositor>, Read<RenderGraphDriver>)>,
 }
 
 impl Node for RunCompositorsNode {
@@ -228,7 +228,7 @@ impl Node for RunCompositorsNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         let mut rendered_windows = EntityHashSet::default();
-        for (entity, compositor) in self.compositors.query_manual(world) {
+        for (entity, compositor, compositor_render_graph) in self.compositors.query_manual(world) {
             /* TODO: include this logic in main world, while processing targets on the compositor
             if let Some(NormalizedRenderTarget::Window(window_ref)) = camera.target {
                 let window_entity = window_ref.entity();
@@ -248,7 +248,11 @@ impl Node for RunCompositorsNode {
                 rendered_windows.insert(window_ref.entity());
             }
 
-            let _ = graph.run_sub_graph(compositor.render_graph, vec![], Some(entity));
+            if let Err(err) =
+                graph.run_sub_graph(*compositor_render_graph.deref(), vec![], Some(entity))
+            {
+                return Err(err.into());
+            }
         }
 
         // wgpu (and some backends) require doing work for swap chains if you call `get_current_texture()` and `present()`
@@ -283,6 +287,83 @@ impl Node for RunCompositorsNode {
                 .command_encoder()
                 .begin_render_pass(&pass_descriptor);
         }
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderSubGraph)]
+pub struct CompositorGraph;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, RenderLabel)]
+pub enum CompositorNode {
+    RunViews,
+    BlitToSurface,
+}
+
+pub struct RunViewsNode {
+    compositors: QueryState<Read<ExtractedCompositor>>,
+    views: QueryState<Read<RenderGraphDriver>, With<ExtractedView>>,
+}
+
+impl Node for RunViewsNode {
+    fn update(&mut self, world: &mut World) {
+        self.compositors.update_archetypes(world);
+        self.views.update_archetypes(world);
+    }
+
+    fn run<'w>(
+        &self,
+        graph: &mut RenderGraphContext,
+        _render_context: &mut RenderContext<'w>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let compositor_query = self.compositors.query_manual(world);
+        let view_query = self.views.query_manual(world);
+
+        let Ok(compositor) = compositor_query.get(graph.view_entity()) else {
+            return Ok(());
+        };
+
+        for view in &compositor.views {
+            let Ok(view_render_graph) = view_query.get(*view) else {
+                continue;
+            };
+            if let Err(err) = graph.run_sub_graph(*view_render_graph.deref(), vec![], Some(*view)) {
+                return Err(err.into());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub struct BlitToSurfaceNode {
+    blitter: wgpu::util::TextureBlitter,
+    //TODO: setup new types for managing and passing around surfaces
+    // compositors: QueryState<(Read<MainCompositorTexture>, Read<RenderSurface>), With<ExtractedCompositor>>,
+    compositors: QueryState<(), With<ExtractedCompositor>>,
+}
+
+impl Node for BlitToSurfaceNode {
+    fn update(&mut self, world: &mut World) {
+        self.compositors.update_archetypes(world);
+    }
+
+    fn run<'w>(
+        &self,
+        graph: &mut RenderGraphContext,
+        render_context: &mut RenderContext<'w>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        let compositor_query = self.compositors.query_manual(world);
+
+        self.blitter.copy(
+            render_context.render_device().wgpu_device(),
+            render_context.command_encoder(),
+            todo!(),
+            todo!(),
+        );
 
         Ok(())
     }

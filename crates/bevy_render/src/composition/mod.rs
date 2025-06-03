@@ -17,6 +17,7 @@ use tracing::warn;
 pub use view::*;
 
 use crate::{
+    extract_component::{ExtractComponent, ExtractComponentPlugin},
     render_graph::{InternedRenderSubGraph, RenderGraphApp, RenderSubGraph},
     RenderApp,
 };
@@ -35,8 +36,10 @@ pub struct CompositionPlugin;
 
 impl Plugin for CompositionPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<RenderGraphDriver>()
-            .add_plugins(RenderTargetPlugin);
+        app.register_type::<RenderGraphDriver>().add_plugins((
+            RenderTargetPlugin,
+            ExtractComponentPlugin::<RenderGraphDriver>::default(),
+        ));
     }
 
     fn finish(&self, app: &mut App) {
@@ -49,7 +52,7 @@ impl Plugin for CompositionPlugin {
 
 /// Configures the [`RenderGraph`](crate::render_graph::RenderGraph) name assigned to be run for a given entity.
 /// This component does nothing on its own, and should be used alongside a [`View`], [`Camera`], or [`Compositor`].
-#[derive(Component, Debug, Deref, DerefMut, Reflect, Clone)]
+#[derive(Component, Debug, Deref, DerefMut, Reflect, Clone, ExtractComponent)]
 #[component(on_add = warn_on_noop_view_render_graph)]
 #[reflect(opaque)]
 #[reflect(Component, Debug, Clone)]

@@ -1,22 +1,24 @@
 use bevy_ecs::{
     component::{Component, HookContext},
     entity::Entity,
-    query::With,
+    query::{QueryItem, With},
     system::{Commands, Query, Single},
-    world::DeferredWorld,
+    world::{DeferredWorld, World},
 };
 use bevy_math::{Rect, URect, UVec2, UVec4, Vec2};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
 use bevy_window::PrimaryWindow;
 use tracing::warn;
 
-use core::ops::Range;
-use std::{ops::Deref, sync::Arc};
+use bevy_platform::sync::Arc;
+use core::ops::{Deref, Range};
 
 use crate::{
     camera::RetainedViewEntity,
     primitives::SubRect,
-    render_graph::InternedRenderSubGraph,
+    render_graph::{InternedRenderSubGraph, NodeRunError, RenderGraphContext, ViewNode},
+    render_resource::TextureView,
+    renderer::RenderContext,
     sync_world::{RenderEntity, SyncToRenderWorld},
     Extract,
 };
@@ -317,7 +319,6 @@ impl ViewTarget {
 pub struct ExtractedView {
     /// The entity in the main world corresponding to this render world view.
     pub retained_view_entity: RetainedViewEntity,
-    pub render_graph: InternedRenderSubGraph,
     /// The render target entity associated with this View
     pub target: NormalizedRenderTarget,
     pub physical_target_size: UVec2,
@@ -341,7 +342,6 @@ pub fn extract_views(
     for (main_entity, render_entity, view, view_target, view_render_graph) in &views {
         let extracted_view = view_target.map(|view_target| ExtractedView {
             retained_view_entity: RetainedViewEntity::new(main_entity.into(), None, 0),
-            render_graph: **view_render_graph,
             target: view_target.target.0.clone(),
             physical_target_size: view_target.physical_target_size(),
             viewport: view_target.viewport().cloned(),
@@ -484,4 +484,25 @@ pub fn extract_views(
     //         }
     //     };
     // }
+}
+
+// -----------------------------------------------------------------------------
+// Render Graph
+
+pub struct BlitToViewTarget;
+
+pub struct BlitToViewTargetNode {}
+
+impl ViewNode for BlitToViewTargetNode {
+    type ViewQuery = ();
+
+    fn run<'w>(
+        &self,
+        graph: &mut RenderGraphContext,
+        render_context: &mut RenderContext<'w>,
+        view_query: QueryItem<'w, Self::ViewQuery>,
+        world: &'w World,
+    ) -> Result<(), NodeRunError> {
+        todo!()
+    }
 }
