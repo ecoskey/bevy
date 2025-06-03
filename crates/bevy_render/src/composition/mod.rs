@@ -32,7 +32,9 @@ impl Plugin for CompositionPlugin {
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        render_app.add_render_sub_graph(NoopRenderGraph).
+        render_app
+            .add_render_sub_graph(NoopRenderGraph)
+            .add_render_sub_graph(CompositorGraph);
     }
 }
 

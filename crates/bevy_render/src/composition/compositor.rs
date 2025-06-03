@@ -14,16 +14,14 @@ use core::iter::Copied;
 use tracing::warn;
 
 use crate::{
-    composition::ViewTarget,
     render_graph::{InternedRenderSubGraph, RenderSubGraph},
     sync_world::{RenderEntity, SyncToRenderWorld},
     Extract,
 };
 
 use super::{
-    render::CompositorGraph,
-    render_target::{ManualTextureViews, NormalizedRenderTarget, RenderTarget, RenderTargetInfo},
-    RenderGraphDriver, SubView, View,
+    render::CompositorGraph, ManualTextureViews, NormalizedRenderTarget, RenderGraphDriver,
+    RenderTarget, RenderTargetInfo, SubView, View, ViewTarget,
 };
 
 // -----------------------------------------------------------------------------
@@ -62,7 +60,7 @@ impl<'a> IntoIterator for &'a Views {
     type IntoIter = Copied<<&'a Vec<Entity> as IntoIterator>::IntoIter>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.iter().copied()
+        (&self.0).into_iter().copied()
     }
 }
 

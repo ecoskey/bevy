@@ -1,3 +1,23 @@
+use bevy_ecs::{
+    component::Component,
+    entity::Entity,
+    query::With,
+    system::{Commands, Query, Single},
+};
+use bevy_math::{UVec2, UVec4};
+use bevy_window::PrimaryWindow;
+
+use crate::{
+    camera::RetainedViewEntity,
+    composition::{
+        render_target::NormalizedRenderTarget, RenderGraphDriver, View, ViewTarget, Viewport,
+    },
+    render_graph::InternedRenderSubGraph,
+    render_resource,
+    sync_world::RenderEntity,
+    Extract,
+};
+
 /// Describes a view in the render world.
 ///
 /// Each entity in the main world can potentially extract to multiple subviews,
@@ -12,9 +32,8 @@ pub struct ExtractedView {
     pub render_graph: InternedRenderSubGraph,
     /// The render target entity associated with this View
     pub target: NormalizedRenderTarget,
-    pub physical_target_size: Option<UVec2>,
-    // uvec4(origin.x, origin.y, width, height)
-    pub viewport: Option<UVec4>,
+    pub physical_target_size: UVec2,
+    pub viewport: Option<Viewport>,
 }
 
 pub fn extract_views(
@@ -36,9 +55,15 @@ pub fn extract_views(
             retained_view_entity: RetainedViewEntity::new(main_entity.into(), None, 0),
             render_graph: **view_render_graph,
             target: view_target.target.0.clone(),
-            viewport: todo!(),
-            physical_target_size: todo!(),
+            physical_target_size: view_target.physical_target_size(),
+            viewport: view_target.viewport().cloned(),
         });
+
+        if let Some(extracted_view) = extracted_view.filter(|_| view.is_enabled()) {
+            commands.entity(render_entity).insert(extracted_view);
+        } else {
+            commands.entity(render_entity).remove::<ExtractedView>();
+        }
     }
     // let primary_window = primary_window.iter().next();
     // for (
@@ -172,3 +197,4 @@ pub fn extract_views(
     //     };
     // }
 }
+
