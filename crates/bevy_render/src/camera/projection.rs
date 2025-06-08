@@ -283,6 +283,8 @@ fn update_projections(
 ) {
     for (camera, view_target, mut projection, mut computed_projection) in cameras {
         let size = view_target.logical_viewport_size();
+        //TODO: ensure that view_target always contains a valid viewport. `Viewport` as a refined
+        //type?
         projection.update(size.x, size.y);
         if camera.crop != computed_projection.prev_crop {
             computed_projection.prev_crop = camera.crop;
