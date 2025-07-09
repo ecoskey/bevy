@@ -1,14 +1,13 @@
 use super::{empty_bind_group_layout, ShaderDefVal};
-use crate::mesh::VertexBufferLayout;
-use crate::WgpuWrapper;
 use crate::{
     define_atomic_id,
+    mesh::VertexBufferLayout,
     render_resource::{BindGroupLayout, Shader},
+    WgpuWrapper,
 };
 use alloc::borrow::Cow;
 use bevy_asset::Handle;
-use core::iter;
-use core::ops::Deref;
+use core::{iter, ops::Deref};
 use thiserror::Error;
 use wgpu::{
     ColorTargetState, DepthStencilState, MultisampleState, PrimitiveState, PushConstantRange,
