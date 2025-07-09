@@ -122,7 +122,7 @@ impl Specializer<RenderPipeline> for BloomDownsamplingSpecializer {
             "bloom_downsampling_pipeline".into()
         });
 
-        let fragment = descriptor.fragment.get_or_insert_default();
+        let fragment = descriptor.fragment_mut()?;
 
         fragment.entry_point = Some(if key.first_downsample {
             "downsample_first".into()
