@@ -28,8 +28,7 @@ use bevy_render::{
     Render, RenderApp, RenderSystems,
 };
 use pipeline::{
-    prepare_downsampling_pipeline, prepare_upsampling_pipeline, BloomDownsamplingPipeline,
-    BloomDownsamplingPipelineIds, BloomUpsamplingPipeline, UpsamplingPipelineIds,
+    prepare_bloom_pipelines, BloomDownsamplePipeline, BloomUpsamplePipeline, CachedBloomPipelines,
 };
 #[cfg(feature = "trace")]
 use tracing::info_span;
@@ -57,8 +56,7 @@ impl Plugin for BloomPlugin {
             .add_systems(
                 Render,
                 (
-                    prepare_downsampling_pipeline.in_set(RenderSystems::Prepare),
-                    prepare_upsampling_pipeline.in_set(RenderSystems::Prepare),
+                    prepare_bloom_pipelines.in_set(RenderSystems::Prepare),
                     prepare_bloom_textures.in_set(RenderSystems::PrepareResources),
                     prepare_bloom_bind_groups.in_set(RenderSystems::PrepareBindGroups),
                 ),
@@ -82,8 +80,8 @@ impl Plugin for BloomPlugin {
             return;
         };
         render_app
-            .init_resource::<BloomDownsamplingPipeline>()
-            .init_resource::<BloomUpsamplingPipeline>();
+            .init_resource::<BloomDownsamplePipeline>()
+            .init_resource::<BloomUpsamplePipeline>();
     }
 }
 
@@ -97,8 +95,7 @@ impl ViewNode for BloomNode {
         &'static BloomBindGroups,
         &'static DynamicUniformIndex<BloomUniforms>,
         &'static Bloom,
-        &'static UpsamplingPipelineIds,
-        &'static BloomDownsamplingPipelineIds,
+        &'static CachedBloomPipelines,
     );
 
     // Atypically for a post-processing effect, we do not need to
@@ -115,8 +112,7 @@ impl ViewNode for BloomNode {
             bind_groups,
             uniform_index,
             bloom_settings,
-            upsampling_pipeline_ids,
-            downsampling_pipeline_ids,
+            cached_bloom_pipelines,
         ): QueryItem<'w, '_, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
@@ -124,22 +120,22 @@ impl ViewNode for BloomNode {
             return Ok(());
         }
 
-        let downsampling_pipeline_res = world.resource::<BloomDownsamplingPipeline>();
+        let downsampling_pipeline_res = world.resource::<BloomDownsamplePipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let uniforms = world.resource::<ComponentUniforms<BloomUniforms>>();
 
         let (
             Some(uniforms),
-            Some(downsampling_first_pipeline),
-            Some(downsampling_pipeline),
-            Some(upsampling_pipeline),
-            Some(upsampling_final_pipeline),
+            Some(first_downsample_pipeline),
+            Some(main_downsample_pipeline),
+            Some(main_upsample_pipeline),
+            Some(final_upsample_pipeline),
         ) = (
             uniforms.binding(),
-            pipeline_cache.get_render_pipeline(downsampling_pipeline_ids.first),
-            pipeline_cache.get_render_pipeline(downsampling_pipeline_ids.main),
-            pipeline_cache.get_render_pipeline(upsampling_pipeline_ids.id_main),
-            pipeline_cache.get_render_pipeline(upsampling_pipeline_ids.id_final),
+            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.first_downsample),
+            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.main_downsample),
+            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.main_upsample),
+            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.final_upsample),
         )
         else {
             return Ok(());
@@ -186,7 +182,7 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                downsampling_first_pass.set_pipeline(downsampling_first_pipeline);
+                downsampling_first_pass.set_pipeline(first_downsample_pipeline);
                 downsampling_first_pass.set_bind_group(
                     0,
                     &downsampling_first_bind_group,
@@ -210,7 +206,7 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                downsampling_pass.set_pipeline(downsampling_pipeline);
+                downsampling_pass.set_pipeline(main_downsample_pipeline);
                 downsampling_pass.set_bind_group(
                     0,
                     &bind_groups.downsampling_bind_groups[mip as usize - 1],
@@ -237,7 +233,7 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                upsampling_pass.set_pipeline(upsampling_pipeline);
+                upsampling_pass.set_pipeline(main_upsample_pipeline);
                 upsampling_pass.set_bind_group(
                     0,
                     &bind_groups.upsampling_bind_groups
@@ -265,7 +261,7 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                upsampling_final_pass.set_pipeline(upsampling_final_pipeline);
+                upsampling_final_pass.set_pipeline(final_upsample_pipeline);
                 upsampling_final_pass.set_bind_group(
                     0,
                     &bind_groups.upsampling_bind_groups[(bloom_texture.mip_count - 1) as usize],
@@ -408,8 +404,8 @@ struct BloomBindGroups {
 fn prepare_bloom_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
-    downsampling_pipeline: Res<BloomDownsamplingPipeline>,
-    upsampling_pipeline: Res<BloomUpsamplingPipeline>,
+    downsampling_pipeline: Res<BloomDownsamplePipeline>,
+    upsampling_pipeline: Res<BloomUpsamplePipeline>,
     views: Query<(Entity, &BloomTexture)>,
     uniforms: Res<ComponentUniforms<BloomUniforms>>,
 ) {

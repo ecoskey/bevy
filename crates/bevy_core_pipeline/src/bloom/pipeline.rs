@@ -21,29 +21,31 @@ use bevy_render::{
 use bevy_utils::default;
 
 #[derive(Component)]
-pub struct BloomDownsamplingPipelineIds {
-    pub main: CachedRenderPipelineId,
-    pub first: CachedRenderPipelineId,
+pub struct CachedBloomPipelines {
+    pub first_downsample: CachedRenderPipelineId,
+    pub main_downsample: CachedRenderPipelineId,
+    pub main_upsample: CachedRenderPipelineId,
+    pub final_upsample: CachedRenderPipelineId,
 }
 
 #[derive(Resource)]
-pub struct BloomDownsamplingPipeline {
+pub struct BloomDownsamplePipeline {
     /// Layout with a texture, a sampler, and uniforms
     pub bind_group_layout: BindGroupLayout,
     pub sampler: Sampler,
-    pub specialized_cache: SpecializedCache<RenderPipeline, BloomDownsamplingSpecializer>,
+    pub specialized_cache: SpecializedCache<RenderPipeline, BloomDownsampleSpecializer>,
 }
 
-pub struct BloomDownsamplingSpecializer;
+pub struct BloomDownsampleSpecializer;
 
 #[derive(PartialEq, Eq, Hash, Clone, SpecializerKey)]
-pub struct BloomDownsamplingKey {
+pub struct BloomDownsampleKey {
     prefilter: bool,
     first_downsample: bool,
     uniform_scale: bool,
 }
 
-impl FromWorld for BloomDownsamplingPipeline {
+impl FromWorld for BloomDownsamplePipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
 
@@ -90,9 +92,9 @@ impl FromWorld for BloomDownsamplingPipeline {
         };
 
         let specialized_cache =
-            SpecializedCache::new(BloomDownsamplingSpecializer, None, base_descriptor);
+            SpecializedCache::new(BloomDownsampleSpecializer, None, base_descriptor);
 
-        BloomDownsamplingPipeline {
+        BloomDownsamplePipeline {
             bind_group_layout,
             sampler,
             specialized_cache,
@@ -100,8 +102,8 @@ impl FromWorld for BloomDownsamplingPipeline {
     }
 }
 
-impl Specializer<RenderPipeline> for BloomDownsamplingSpecializer {
-    type Key = BloomDownsamplingKey;
+impl Specializer<RenderPipeline> for BloomDownsampleSpecializer {
+    type Key = BloomDownsampleKey;
 
     fn specialize(
         &self,
@@ -140,56 +142,67 @@ impl Specializer<RenderPipeline> for BloomDownsamplingSpecializer {
     }
 }
 
-pub fn prepare_downsampling_pipeline(
+pub fn prepare_bloom_pipelines(
     mut commands: Commands,
     pipeline_cache: Res<PipelineCache>,
-    mut pipeline: ResMut<BloomDownsamplingPipeline>,
+    mut downsample_pipeline: ResMut<BloomDownsamplePipeline>,
+    mut upsample_pipeline: ResMut<BloomUpsamplePipeline>,
     views: Query<(Entity, &Bloom)>,
 ) -> Result<(), BevyError> {
     for (entity, bloom) in &views {
         let prefilter = bloom.prefilter.threshold > 0.0;
 
-        let pipeline_id = pipeline.specialized_cache.specialize(
+        let first_downsample = downsample_pipeline.specialized_cache.specialize(
             &pipeline_cache,
-            BloomDownsamplingKey {
+            BloomDownsampleKey {
                 prefilter,
                 first_downsample: false,
                 uniform_scale: bloom.scale == Vec2::ONE,
             },
         )?;
 
-        let pipeline_first_id = pipeline.specialized_cache.specialize(
+        let main_downsample = downsample_pipeline.specialized_cache.specialize(
             &pipeline_cache,
-            BloomDownsamplingKey {
+            BloomDownsampleKey {
                 prefilter,
-                first_downsample: true,
+                first_downsample: false,
                 uniform_scale: bloom.scale == Vec2::ONE,
             },
         )?;
 
-        commands
-            .entity(entity)
-            .insert(BloomDownsamplingPipelineIds {
-                first: pipeline_first_id,
-                main: pipeline_id,
-            });
+        let main_upsample = upsample_pipeline.specialized_cache.specialize(
+            &pipeline_cache,
+            BloomUpsampleKey {
+                composite_mode: bloom.composite_mode,
+                final_pipeline: false,
+            },
+        )?;
+
+        let final_upsample = upsample_pipeline.specialized_cache.specialize(
+            &pipeline_cache,
+            BloomUpsampleKey {
+                composite_mode: bloom.composite_mode,
+                final_pipeline: true,
+            },
+        )?;
+
+        commands.entity(entity).insert(CachedBloomPipelines {
+            first_downsample,
+            main_downsample,
+            main_upsample,
+            final_upsample,
+        });
     }
     Ok(())
 }
 
-#[derive(Component)]
-pub struct UpsamplingPipelineIds {
-    pub id_main: CachedRenderPipelineId,
-    pub id_final: CachedRenderPipelineId,
-}
-
 #[derive(Resource)]
-pub struct BloomUpsamplingPipeline {
+pub struct BloomUpsamplePipeline {
     pub bind_group_layout: BindGroupLayout,
-    pub specialized_cache: SpecializedCache<RenderPipeline, BloomUpsamplingSpecializer>,
+    pub specialized_cache: SpecializedCache<RenderPipeline, BloomUpsampleSpecializer>,
 }
 
-impl FromWorld for BloomUpsamplingPipeline {
+impl FromWorld for BloomUpsamplePipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
 
@@ -223,25 +236,25 @@ impl FromWorld for BloomUpsamplingPipeline {
         };
 
         let specialized_cache =
-            SpecializedCache::new(BloomUpsamplingSpecializer, None, base_descriptor);
+            SpecializedCache::new(BloomUpsampleSpecializer, None, base_descriptor);
 
-        BloomUpsamplingPipeline {
+        BloomUpsamplePipeline {
             bind_group_layout,
             specialized_cache,
         }
     }
 }
 
-pub struct BloomUpsamplingSpecializer;
+pub struct BloomUpsampleSpecializer;
 
 #[derive(PartialEq, Eq, Hash, Clone, SpecializerKey)]
-pub struct BloomUpsamplingKey {
+pub struct BloomUpsampleKey {
     composite_mode: BloomCompositeMode,
     final_pipeline: bool,
 }
 
-impl Specializer<RenderPipeline> for BloomUpsamplingSpecializer {
-    type Key = BloomUpsamplingKey;
+impl Specializer<RenderPipeline> for BloomUpsampleSpecializer {
+    type Key = BloomUpsampleKey;
 
     fn specialize(
         &self,
@@ -303,35 +316,4 @@ impl Specializer<RenderPipeline> for BloomUpsamplingSpecializer {
 
         Ok(key)
     }
-}
-
-pub fn prepare_upsampling_pipeline(
-    mut commands: Commands,
-    pipeline_cache: Res<PipelineCache>,
-    mut pipeline: ResMut<BloomUpsamplingPipeline>,
-    views: Query<(Entity, &Bloom)>,
-) -> Result<(), BevyError> {
-    for (entity, bloom) in &views {
-        let pipeline_id = pipeline.specialized_cache.specialize(
-            &pipeline_cache,
-            BloomUpsamplingKey {
-                composite_mode: bloom.composite_mode,
-                final_pipeline: false,
-            },
-        )?;
-
-        let pipeline_final_id = pipeline.specialized_cache.specialize(
-            &pipeline_cache,
-            BloomUpsamplingKey {
-                composite_mode: bloom.composite_mode,
-                final_pipeline: true,
-            },
-        )?;
-
-        commands.entity(entity).insert(UpsamplingPipelineIds {
-            id_main: pipeline_id,
-            id_final: pipeline_final_id,
-        });
-    }
-    Ok(())
 }
