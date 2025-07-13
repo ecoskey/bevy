@@ -1,4 +1,5 @@
 mod downsampling_pipeline;
+mod pipeline;
 mod settings;
 mod upsampling_pipeline;
 
