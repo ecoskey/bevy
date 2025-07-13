@@ -129,13 +129,13 @@ impl ViewNode for BloomNode {
             Some(first_downsample_pipeline),
             Some(main_downsample_pipeline),
             Some(main_upsample_pipeline),
-            Some(final_upsample_pipeline),
+            Some(last_upsample_pipeline),
         ) = (
             uniforms.binding(),
             pipeline_cache.get_render_pipeline(cached_bloom_pipelines.first_downsample),
             pipeline_cache.get_render_pipeline(cached_bloom_pipelines.main_downsample),
             pipeline_cache.get_render_pipeline(cached_bloom_pipelines.main_upsample),
-            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.final_upsample),
+            pipeline_cache.get_render_pipeline(cached_bloom_pipelines.last_upsample),
         )
         else {
             return Ok(());
@@ -170,9 +170,9 @@ impl ViewNode for BloomNode {
                 );
 
                 let view = &bloom_texture.view(0);
-                let mut downsampling_first_pass =
+                let mut first_downsample_pass =
                     command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("bloom_downsampling_first_pass"),
+                        label: Some("bloom_first_downsample_pass"),
                         color_attachments: &[Some(RenderPassColorAttachment {
                             view,
                             resolve_target: None,
@@ -182,21 +182,21 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                downsampling_first_pass.set_pipeline(first_downsample_pipeline);
-                downsampling_first_pass.set_bind_group(
+                first_downsample_pass.set_pipeline(first_downsample_pipeline);
+                first_downsample_pass.set_bind_group(
                     0,
                     &downsampling_first_bind_group,
                     &[uniform_index.index()],
                 );
-                downsampling_first_pass.draw(0..3, 0..1);
+                first_downsample_pass.draw(0..3, 0..1);
             }
 
             // Other downsample passes
             for mip in 1..bloom_texture.mip_count {
                 let view = &bloom_texture.view(mip);
-                let mut downsampling_pass =
+                let mut downsample_pass =
                     command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("bloom_downsampling_pass"),
+                        label: Some("bloom_downsample_pass"),
                         color_attachments: &[Some(RenderPassColorAttachment {
                             view,
                             resolve_target: None,
@@ -206,38 +206,36 @@ impl ViewNode for BloomNode {
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                downsampling_pass.set_pipeline(main_downsample_pipeline);
-                downsampling_pass.set_bind_group(
+                downsample_pass.set_pipeline(main_downsample_pipeline);
+                downsample_pass.set_bind_group(
                     0,
-                    &bind_groups.downsampling_bind_groups[mip as usize - 1],
+                    &bind_groups.downsample_bind_groups[mip as usize - 1],
                     &[uniform_index.index()],
                 );
-                downsampling_pass.draw(0..3, 0..1);
+                downsample_pass.draw(0..3, 0..1);
             }
 
-            // Upsample passes except the final one
+            // Upsample passes except the last one
             for mip in (1..bloom_texture.mip_count).rev() {
                 let view = &bloom_texture.view(mip - 1);
-                let mut upsampling_pass =
-                    command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("bloom_upsampling_pass"),
-                        color_attachments: &[Some(RenderPassColorAttachment {
-                            view,
-                            resolve_target: None,
-                            ops: Operations {
-                                load: LoadOp::Load,
-                                store: StoreOp::Store,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                        timestamp_writes: None,
-                        occlusion_query_set: None,
-                    });
-                upsampling_pass.set_pipeline(main_upsample_pipeline);
-                upsampling_pass.set_bind_group(
+                let mut upsample_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("bloom_upsample_pass"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Load,
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                upsample_pass.set_pipeline(main_upsample_pipeline);
+                upsample_pass.set_bind_group(
                     0,
-                    &bind_groups.upsampling_bind_groups
-                        [(bloom_texture.mip_count - mip - 1) as usize],
+                    &bind_groups.upsample_bind_groups[(bloom_texture.mip_count - mip - 1) as usize],
                     &[uniform_index.index()],
                 );
                 let blend = compute_blend_factor(
@@ -245,30 +243,30 @@ impl ViewNode for BloomNode {
                     mip as f32,
                     (bloom_texture.mip_count - 1) as f32,
                 );
-                upsampling_pass.set_blend_constant(LinearRgba::gray(blend).into());
-                upsampling_pass.draw(0..3, 0..1);
+                upsample_pass.set_blend_constant(LinearRgba::gray(blend).into());
+                upsample_pass.draw(0..3, 0..1);
             }
 
-            // Final upsample pass
+            // Last upsample pass
             // This is very similar to the above upsampling passes with the only difference
             // being the pipeline (which itself is barely different) and the color attachment
             {
-                let mut upsampling_final_pass =
+                let mut last_upsample_pass =
                     command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("bloom_upsampling_final_pass"),
+                        label: Some("bloom_last_upsample_pass"),
                         color_attachments: &[Some(view_texture_unsampled)],
                         depth_stencil_attachment: None,
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     });
-                upsampling_final_pass.set_pipeline(final_upsample_pipeline);
-                upsampling_final_pass.set_bind_group(
+                last_upsample_pass.set_pipeline(last_upsample_pipeline);
+                last_upsample_pass.set_bind_group(
                     0,
-                    &bind_groups.upsampling_bind_groups[(bloom_texture.mip_count - 1) as usize],
+                    &bind_groups.upsample_bind_groups[(bloom_texture.mip_count - 1) as usize],
                     &[uniform_index.index()],
                 );
                 if let Some(viewport) = camera.viewport.as_ref() {
-                    upsampling_final_pass.set_viewport(
+                    last_upsample_pass.set_viewport(
                         viewport.physical_position.x as f32,
                         viewport.physical_position.y as f32,
                         viewport.physical_size.x as f32,
@@ -279,8 +277,8 @@ impl ViewNode for BloomNode {
                 }
                 let blend =
                     compute_blend_factor(bloom_settings, 0.0, (bloom_texture.mip_count - 1) as f32);
-                upsampling_final_pass.set_blend_constant(LinearRgba::gray(blend).into());
-                upsampling_final_pass.draw(0..3, 0..1);
+                last_upsample_pass.set_blend_constant(LinearRgba::gray(blend).into());
+                last_upsample_pass.draw(0..3, 0..1);
             }
 
             time_span.end(&mut command_encoder);
@@ -396,29 +394,29 @@ fn prepare_bloom_textures(
 
 #[derive(Component)]
 struct BloomBindGroups {
-    downsampling_bind_groups: Box<[BindGroup]>,
-    upsampling_bind_groups: Box<[BindGroup]>,
+    downsample_bind_groups: Box<[BindGroup]>,
+    upsample_bind_groups: Box<[BindGroup]>,
     sampler: Sampler,
 }
 
 fn prepare_bloom_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
-    downsampling_pipeline: Res<BloomDownsamplePipeline>,
-    upsampling_pipeline: Res<BloomUpsamplePipeline>,
+    downsample_pipeline: Res<BloomDownsamplePipeline>,
+    upsample_pipeline: Res<BloomUpsamplePipeline>,
     views: Query<(Entity, &BloomTexture)>,
     uniforms: Res<ComponentUniforms<BloomUniforms>>,
 ) {
-    let sampler = &downsampling_pipeline.sampler;
+    let sampler = &downsample_pipeline.sampler;
 
     for (entity, bloom_texture) in &views {
         let bind_group_count = bloom_texture.mip_count as usize - 1;
 
-        let mut downsampling_bind_groups = Vec::with_capacity(bind_group_count);
+        let mut downsample_bind_groups = Vec::with_capacity(bind_group_count);
         for mip in 1..bloom_texture.mip_count {
-            downsampling_bind_groups.push(render_device.create_bind_group(
+            downsample_bind_groups.push(render_device.create_bind_group(
                 "bloom_downsampling_bind_group",
-                &downsampling_pipeline.bind_group_layout,
+                &downsample_pipeline.bind_group_layout,
                 &BindGroupEntries::sequential((
                     &bloom_texture.view(mip - 1),
                     sampler,
@@ -427,11 +425,11 @@ fn prepare_bloom_bind_groups(
             ));
         }
 
-        let mut upsampling_bind_groups = Vec::with_capacity(bind_group_count);
+        let mut upsample_bind_groups = Vec::with_capacity(bind_group_count);
         for mip in (0..bloom_texture.mip_count).rev() {
-            upsampling_bind_groups.push(render_device.create_bind_group(
+            upsample_bind_groups.push(render_device.create_bind_group(
                 "bloom_upsampling_bind_group",
-                &upsampling_pipeline.bind_group_layout,
+                &upsample_pipeline.bind_group_layout,
                 &BindGroupEntries::sequential((
                     &bloom_texture.view(mip),
                     sampler,
@@ -441,8 +439,8 @@ fn prepare_bloom_bind_groups(
         }
 
         commands.entity(entity).insert(BloomBindGroups {
-            downsampling_bind_groups: downsampling_bind_groups.into_boxed_slice(),
-            upsampling_bind_groups: upsampling_bind_groups.into_boxed_slice(),
+            downsample_bind_groups: downsample_bind_groups.into_boxed_slice(),
+            upsample_bind_groups: upsample_bind_groups.into_boxed_slice(),
             sampler: sampler.clone(),
         });
     }
@@ -453,7 +451,7 @@ fn prepare_bloom_bind_groups(
 ///
 /// The function assumes all pyramid levels are upsampled and
 /// blended into higher frequency ones using this function to
-/// calculate blend levels every time. The final (highest frequency)
+/// calculate blend levels every time. The last (highest frequency)
 /// pyramid level in not blended into anything therefore this function
 /// is not applied to it. As a result, the *mip* parameter of 0 indicates
 /// the second-highest frequency pyramid level (in our case that is the

@@ -25,7 +25,7 @@ pub struct CachedBloomPipelines {
     pub first_downsample: CachedRenderPipelineId,
     pub main_downsample: CachedRenderPipelineId,
     pub main_upsample: CachedRenderPipelineId,
-    pub final_upsample: CachedRenderPipelineId,
+    pub last_upsample: CachedRenderPipelineId,
 }
 
 #[derive(Resource)]
@@ -174,15 +174,15 @@ pub fn prepare_bloom_pipelines(
             &pipeline_cache,
             BloomUpsampleKey {
                 composite_mode: bloom.composite_mode,
-                final_pipeline: false,
+                last_upsample: false,
             },
         )?;
 
-        let final_upsample = upsample_pipeline.specialized_cache.specialize(
+        let last_upsample = upsample_pipeline.specialized_cache.specialize(
             &pipeline_cache,
             BloomUpsampleKey {
                 composite_mode: bloom.composite_mode,
-                final_pipeline: true,
+                last_upsample: true,
             },
         )?;
 
@@ -190,7 +190,7 @@ pub fn prepare_bloom_pipelines(
             first_downsample,
             main_downsample,
             main_upsample,
-            final_upsample,
+            last_upsample,
         });
     }
     Ok(())
@@ -250,7 +250,7 @@ pub struct BloomUpsampleSpecializer;
 #[derive(PartialEq, Eq, Hash, Clone, SpecializerKey)]
 pub struct BloomUpsampleKey {
     composite_mode: BloomCompositeMode,
-    final_pipeline: bool,
+    last_upsample: bool,
 }
 
 impl Specializer<RenderPipeline> for BloomUpsampleSpecializer {
@@ -261,7 +261,7 @@ impl Specializer<RenderPipeline> for BloomUpsampleSpecializer {
         key: Self::Key,
         descriptor: &mut RenderPipelineDescriptor,
     ) -> Result<Canonical<Self::Key>, BevyError> {
-        let texture_format = if key.final_pipeline {
+        let texture_format = if key.last_upsample {
             ViewTarget::TEXTURE_FORMAT_HDR
         } else {
             BLOOM_TEXTURE_FORMAT
