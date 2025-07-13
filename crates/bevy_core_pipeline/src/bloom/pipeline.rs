@@ -1,6 +1,6 @@
 use crate::FullscreenShader;
 
-use super::{Bloom, BloomCompositeMode, BLOOM_TEXTURE_FORMAT};
+use super::{settings::BloomUniforms, Bloom, BloomCompositeMode, BLOOM_TEXTURE_FORMAT};
 use bevy_asset::load_embedded_asset;
 use bevy_ecs::{
     error::BevyError,
@@ -9,7 +9,7 @@ use bevy_ecs::{
     system::{Commands, Query, Res, ResMut},
     world::{FromWorld, World},
 };
-use bevy_math::{Vec2, Vec4};
+use bevy_math::Vec2;
 use bevy_render::{
     render_resource::{
         binding_types::{sampler, texture_2d, uniform_buffer},
@@ -41,17 +41,6 @@ pub struct BloomDownsamplingKey {
     prefilter: bool,
     first_downsample: bool,
     uniform_scale: bool,
-}
-
-/// The uniform struct extracted from [`Bloom`] attached to a Camera.
-/// Will be available for use in the Bloom shader.
-#[derive(Component, ShaderType, Clone)]
-pub struct BloomUniforms {
-    // Precomputed values used when thresholding, see https://catlikecoding.com/unity/tutorials/advanced-rendering/bloom/#3.4
-    pub threshold_precomputations: Vec4,
-    pub viewport: Vec4,
-    pub scale: Vec2,
-    pub aspect: f32,
 }
 
 impl FromWorld for BloomDownsamplingPipeline {

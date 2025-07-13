@@ -2,6 +2,7 @@ mod pipeline;
 mod settings;
 
 use bevy_image::ToExtents;
+use settings::BloomUniforms;
 pub use settings::{Bloom, BloomCompositeMode, BloomPrefilter};
 
 use crate::{
@@ -28,7 +29,7 @@ use bevy_render::{
 };
 use pipeline::{
     prepare_downsampling_pipeline, prepare_upsampling_pipeline, BloomDownsamplingPipeline,
-    BloomDownsamplingPipelineIds, BloomUniforms, BloomUpsamplingPipeline, UpsamplingPipelineIds,
+    BloomDownsamplingPipelineIds, BloomUpsamplingPipeline, UpsamplingPipelineIds,
 };
 #[cfg(feature = "trace")]
 use tracing::info_span;

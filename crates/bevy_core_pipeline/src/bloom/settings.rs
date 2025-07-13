@@ -1,4 +1,3 @@
-use super::pipeline::BloomUniforms;
 use bevy_ecs::{
     prelude::Component,
     query::{QueryItem, With},
@@ -6,7 +5,9 @@ use bevy_ecs::{
 };
 use bevy_math::{AspectRatio, URect, UVec4, Vec2, Vec4};
 use bevy_reflect::{std_traits::ReflectDefault, Reflect};
-use bevy_render::{extract_component::ExtractComponent, prelude::Camera, view::Hdr};
+use bevy_render::{
+    extract_component::ExtractComponent, prelude::Camera, render_resource::ShaderType, view::Hdr,
+};
 
 /// Applies a bloom effect to an HDR-enabled 2d or 3d camera.
 ///
@@ -219,6 +220,17 @@ pub struct BloomPrefilter {
 pub enum BloomCompositeMode {
     EnergyConserving,
     Additive,
+}
+
+/// The uniform struct extracted from [`Bloom`] attached to a Camera.
+/// Will be available for use in the Bloom shader.
+#[derive(Component, ShaderType, Clone)]
+pub struct BloomUniforms {
+    // Precomputed values used when thresholding, see https://catlikecoding.com/unity/tutorials/advanced-rendering/bloom/#3.4
+    pub threshold_precomputations: Vec4,
+    pub viewport: Vec4,
+    pub scale: Vec2,
+    pub aspect: f32,
 }
 
 impl ExtractComponent for Bloom {
