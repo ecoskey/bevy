@@ -1,4 +1,4 @@
-use super::downsampling_pipeline::BloomUniforms;
+use super::pipeline::BloomUniforms;
 use bevy_ecs::{
     prelude::Component,
     query::{QueryItem, With},

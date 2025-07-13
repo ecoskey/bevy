@@ -1,7 +1,5 @@
-mod downsampling_pipeline;
 mod pipeline;
 mod settings;
-mod upsampling_pipeline;
 
 use bevy_image::ToExtents;
 pub use settings::{Bloom, BloomCompositeMode, BloomPrefilter};
@@ -28,15 +26,12 @@ use bevy_render::{
     view::ViewTarget,
     Render, RenderApp, RenderSystems,
 };
-use downsampling_pipeline::{
-    prepare_downsampling_pipeline, BloomDownsamplingPipeline, BloomDownsamplingPipelineIds,
-    BloomUniforms,
+use pipeline::{
+    prepare_downsampling_pipeline, prepare_upsampling_pipeline, BloomDownsamplingPipeline,
+    BloomDownsamplingPipelineIds, BloomUniforms, BloomUpsamplingPipeline, UpsamplingPipelineIds,
 };
 #[cfg(feature = "trace")]
 use tracing::info_span;
-use upsampling_pipeline::{
-    prepare_upsampling_pipeline, BloomUpsamplingPipeline, UpsamplingPipelineIds,
-};
 
 const BLOOM_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rg11b10Ufloat;
 
