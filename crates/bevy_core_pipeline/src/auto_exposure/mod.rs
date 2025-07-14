@@ -5,9 +5,7 @@ use bevy_render::{
     extract_component::ExtractComponentPlugin,
     render_asset::RenderAssetPlugin,
     render_graph::RenderGraphExt,
-    render_resource::{
-        Buffer, BufferDescriptor, BufferUsages, PipelineCache, SpecializedComputePipelines,
-    },
+    render_resource::{Buffer, BufferDescriptor, BufferUsages, PipelineCache},
     renderer::RenderDevice,
     ExtractSchedule, Render, RenderApp, RenderStartup, RenderSystems,
 };
@@ -61,7 +59,6 @@ impl Plugin for AutoExposurePlugin {
         };
 
         render_app
-            .init_resource::<SpecializedComputePipelines<AutoExposurePipeline>>()
             .init_resource::<AutoExposureBuffers>()
             .add_systems(
                 RenderStartup,
@@ -97,15 +94,16 @@ pub fn init_auto_exposure_resources(mut commands: Commands, render_device: Res<R
 fn queue_view_auto_exposure_pipelines(
     mut commands: Commands,
     pipeline_cache: Res<PipelineCache>,
-    mut compute_pipelines: ResMut<SpecializedComputePipelines<AutoExposurePipeline>>,
-    pipeline: Res<AutoExposurePipeline>,
+    mut auto_exposure_pipeline: ResMut<AutoExposurePipeline>,
     view_targets: Query<(Entity, &AutoExposure)>,
-) {
+) -> Result<(), BevyError> {
     for (entity, auto_exposure) in view_targets.iter() {
-        let histogram_pipeline =
-            compute_pipelines.specialize(&pipeline_cache, &pipeline, AutoExposurePass::Histogram);
-        let average_pipeline =
-            compute_pipelines.specialize(&pipeline_cache, &pipeline, AutoExposurePass::Average);
+        let histogram_pipeline = auto_exposure_pipeline
+            .variants
+            .specialize(&pipeline_cache, AutoExposurePass::Histogram)?;
+        let average_pipeline = auto_exposure_pipeline
+            .variants
+            .specialize(&pipeline_cache, AutoExposurePass::Average)?;
 
         commands.entity(entity).insert(ViewAutoExposurePipeline {
             histogram_pipeline,
@@ -114,4 +112,5 @@ fn queue_view_auto_exposure_pipelines(
             metering_mask: auto_exposure.metering_mask.clone(),
         });
     }
+    Ok(())
 }
