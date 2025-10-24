@@ -24,8 +24,8 @@ use core::{mem::needs_drop, panic::Location};
 #[derive(Debug)]
 pub struct Column {
     pub(super) data: BlobArray,
-    pub(super) added_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
-    pub(super) changed_ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+    pub(super) added_ticks: ColumnTicks,
+    pub(super) changed_ticks: ColumnTicks,
     pub(super) changed_by: MaybeLocation<ThinArrayPtr<UnsafeCell<&'static Location<'static>>>>,
 }
 
@@ -37,8 +37,8 @@ impl Column {
             data: unsafe {
                 BlobArray::with_capacity(component_info.layout(), component_info.drop(), capacity)
             },
-            added_ticks: ThinArrayPtr::with_capacity(capacity),
-            changed_ticks: ThinArrayPtr::with_capacity(capacity),
+            added_ticks: ColumnTicks::with_capacity(capacity),
+            changed_ticks: ColumnTicks::with_capacity(capacity),
             changed_by: MaybeLocation::new_with(|| ThinArrayPtr::with_capacity(capacity)),
         }
     }
@@ -58,9 +58,9 @@ impl Column {
         self.data
             .swap_remove_and_drop_unchecked_nonoverlapping(row.index(), last_element_index);
         self.added_ticks
-            .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
+            .swap_remove_unchecked_nonoverlapping(last_element_index, row);
         self.changed_ticks
-            .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
+            .swap_remove_unchecked_nonoverlapping(last_element_index, row);
         self.changed_by.as_mut().map(|changed_by| {
             changed_by.swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
         });
@@ -80,9 +80,9 @@ impl Column {
         self.data
             .swap_remove_and_drop_unchecked(row.index(), last_element_index);
         self.added_ticks
-            .swap_remove_unchecked(row.index(), last_element_index);
+            .swap_remove_unchecked(last_element_index, row);
         self.changed_ticks
-            .swap_remove_unchecked(row.index(), last_element_index);
+            .swap_remove_unchecked(last_element_index, row);
         self.changed_by.as_mut().map(|changed_by| {
             changed_by.swap_remove_unchecked(row.index(), last_element_index);
         });
@@ -104,9 +104,9 @@ impl Column {
             .data
             .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
         self.added_ticks
-            .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
+            .swap_remove_unchecked_nonoverlapping(last_element_index, row);
         self.changed_ticks
-            .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
+            .swap_remove_unchecked_nonoverlapping(last_element_index, row);
         self.changed_by.as_mut().map(|changed_by| {
             changed_by.swap_remove_unchecked_nonoverlapping(row.index(), last_element_index);
         });
@@ -128,9 +128,9 @@ impl Column {
             .data
             .swap_remove_unchecked(row.index(), last_element_index);
         self.added_ticks
-            .swap_remove_unchecked(row.index(), last_element_index);
+            .swap_remove_unchecked(last_element_index, row);
         self.changed_ticks
-            .swap_remove_unchecked(row.index(), last_element_index);
+            .swap_remove_unchecked(last_element_index, row);
         self.changed_by
             .as_mut()
             .map(|changed_by| changed_by.swap_remove_unchecked(row.index(), last_element_index));
@@ -190,8 +190,8 @@ impl Column {
         caller: MaybeLocation,
     ) {
         self.data.initialize_unchecked(row.index(), data);
-        *self.added_ticks.get_unchecked_mut(row.index()).get_mut() = tick;
-        *self.changed_ticks.get_unchecked_mut(row.index()).get_mut() = tick;
+        self.added_ticks.set(row, tick);
+        self.changed_ticks.set(row, tick);
         self.changed_by
             .as_mut()
             .map(|changed_by| changed_by.get_unchecked_mut(row.index()).get_mut())
@@ -213,7 +213,7 @@ impl Column {
         caller: MaybeLocation,
     ) {
         self.data.replace_unchecked(row.index(), data);
-        *self.changed_ticks.get_unchecked_mut(row.index()).get_mut() = change_tick;
+        self.changed_ticks.set(row, change_tick);
         self.changed_by
             .as_mut()
             .map(|changed_by| changed_by.get_unchecked_mut(row.index()).get_mut())
@@ -247,15 +247,14 @@ impl Column {
         // Init added_ticks
         let added_tick = other
             .added_ticks
-            .swap_remove_unchecked(src_row.index(), other_last_element_index);
-        self.added_ticks
-            .initialize_unchecked(dst_row.index(), added_tick);
+            .swap_remove_unchecked(other_last_element_index, src_row);
+        self.added_ticks.set(dst_row, added_tick);
         // Init changed_ticks
         let changed_tick = other
             .changed_ticks
-            .swap_remove_unchecked(src_row.index(), other_last_element_index);
-        self.changed_ticks
-            .initialize_unchecked(dst_row.index(), changed_tick);
+            .swap_remove_unchecked(other_last_element_index, src_row);
+        self.changed_ticks.set(dst_row, changed_tick);
+        // Init changed_by
         self.changed_by.as_mut().zip(other.changed_by.as_mut()).map(
             |(self_changed_by, other_changed_by)| {
                 let changed_by = other_changed_by
@@ -275,7 +274,7 @@ impl Column {
             // SAFETY:
             // - `i` < `len`
             // we have a mutable reference to `self`
-            unsafe { self.added_ticks.get_unchecked_mut(i) }
+            unsafe { self.added_ticks.get_unchecked_mut((i)) }
                 .get_mut()
                 .check_tick(check);
             // SAFETY:
@@ -344,7 +343,7 @@ impl Column {
     /// # Safety
     /// - `len` must match the actual length of this column (number of elements stored)
     pub unsafe fn get_added_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.added_ticks.as_slice(len)
+        self.added_ticks.get_slice(len)
     }
 
     /// Get a slice to the changed [`ticks`](Tick) in this [`Column`].
@@ -352,7 +351,7 @@ impl Column {
     /// # Safety
     /// - `len` must match the actual length of this column (number of elements stored)
     pub unsafe fn get_changed_ticks_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
-        self.changed_ticks.as_slice(len)
+        self.changed_ticks.get_slice(len)
     }
 
     /// Get a slice to the calling locations that last changed each value in this [`Column`]
@@ -402,7 +401,7 @@ impl Column {
     /// `row` must be within the range `[0, self.len())`.
     #[inline]
     pub unsafe fn get_added_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.added_ticks.get_unchecked(row.index())
+        self.added_ticks.get_unchecked(row)
     }
 
     /// Fetches the "changed" change detection tick for the value at `row`
@@ -412,7 +411,7 @@ impl Column {
     /// `row` must be within the range `[0, self.len())`.
     #[inline]
     pub unsafe fn get_changed_tick_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
-        self.changed_ticks.get_unchecked(row.index())
+        self.changed_ticks.get_unchecked(row)
     }
 
     /// Fetches the change detection ticks for the value at `row`.
@@ -423,8 +422,8 @@ impl Column {
     #[inline]
     pub unsafe fn get_ticks_unchecked(&self, row: TableRow) -> ComponentTicks {
         ComponentTicks {
-            added: self.added_ticks.get_unchecked(row.index()).read(),
-            changed: self.changed_ticks.get_unchecked(row.index()).read(),
+            added: self.added_ticks.get_unchecked(row).read(),
+            changed: self.changed_ticks.get_unchecked(row).read(),
         }
     }
 
@@ -433,5 +432,162 @@ impl Column {
     #[inline]
     pub fn get_drop(&self) -> Option<unsafe fn(OwningPtr<'_>)> {
         self.data.get_drop()
+    }
+}
+
+#[derive(Debug)]
+pub struct ColumnTicks {
+    ticks: ThinArrayPtr<UnsafeCell<Tick>>,
+}
+
+impl ColumnTicks {
+    /// Create a new [`Column`] with the given `capacity`.
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            ticks: ThinArrayPtr::with_capacity(capacity),
+        }
+    }
+
+    /// Swap-remove the removed element, but the element at `row` must not be the last element.
+    ///
+    /// # Safety
+    /// - `row.as_usize()` < `len`
+    /// - `last_element_index` = `len - 1`
+    /// - `last_element_index` != `row.as_usize()`
+    /// -   The caller should update the `len` to `len - 1`, or immediately initialize another element in the `last_element_index`
+    #[inline]
+    pub(crate) unsafe fn swap_remove_unchecked_nonoverlapping(
+        &mut self,
+        last_element_index: usize,
+        row: TableRow,
+    ) -> Tick {
+        self.ticks
+            .swap_remove_unchecked_nonoverlapping(row.index(), last_element_index)
+            .read()
+    }
+
+    /// Swap-remove and drop the removed element.
+    ///
+    /// # Safety
+    /// - `last_element_index` must be the index of the last element—stored in the highest place in memory.
+    /// - `row.as_usize()` <= `last_element_index`
+    /// -   The caller should update their saved length to reflect the change (decrement it by 1).
+    #[inline]
+    pub(crate) unsafe fn swap_remove_unchecked(
+        &mut self,
+        last_element_index: usize,
+        row: TableRow,
+    ) -> Tick {
+        self.ticks
+            .swap_remove_unchecked(row.index(), last_element_index)
+            .read()
+    }
+
+    /// Call [`realloc`](std::alloc::realloc) to expand / shrink the memory allocation for this [`Column`]
+    ///
+    /// # Panics
+    /// - Panics if the any of the new capacity overflows `isize::MAX` bytes.
+    /// - Panics if the any of the reallocations causes an out-of-memory error.
+    ///
+    /// # Safety
+    /// - `current_capacity` must be the current capacity of this column (the capacity of `self.data`, `self.added_ticks`, `self.changed_tick`)
+    /// -   The caller should make sure their saved `capacity` value is updated to `new_capacity` after this operation.
+    #[inline]
+    pub(crate) unsafe fn realloc(
+        &mut self,
+        current_capacity: NonZeroUsize,
+        new_capacity: NonZeroUsize,
+    ) {
+        self.ticks.realloc(current_capacity, new_capacity);
+    }
+
+    /// Call [`alloc`](std::alloc::alloc) to allocate memory for this [`Column`]
+    /// The caller should make sure their saved `capacity` value is updated to `new_capacity` after this operation.
+    ///
+    /// # Panics
+    /// - Panics if the any of the new capacity overflows `isize::MAX` bytes.
+    /// - Panics if the any of the allocations causes an out-of-memory error.
+    pub(crate) fn alloc(&mut self, new_capacity: NonZeroUsize) {
+        self.ticks.alloc(new_capacity);
+    }
+
+    /// Writes component data to the column at the given row.
+    /// Assumes the slot is uninitialized, drop is not called.
+    /// To overwrite existing initialized value, use [`Self::replace`] instead.
+    ///
+    /// # Safety
+    /// - `row.as_usize()` must be in bounds.
+    /// - `comp_ptr` holds a component that matches the `component_id`
+    #[inline]
+    pub(crate) unsafe fn set(&mut self, row: TableRow, tick: Tick) {
+        *self.ticks.get_unchecked_mut(row.index()).get_mut() = tick;
+    }
+
+    /// Call [`Tick::check_tick`] on all of the ticks stored in this column.
+    ///
+    /// # Safety
+    /// `len` is the actual length of this column
+    #[inline]
+    pub(crate) unsafe fn check_change_ticks(&mut self, len: usize, check: CheckChangeTicks) {
+        for i in 0..len {
+            // SAFETY:
+            // - `i` < `len`
+            // we have a mutable reference to `self`
+            unsafe { self.ticks.get_unchecked_mut(i) }
+                .get_mut()
+                .check_tick(check);
+        }
+    }
+
+    /// Clear all the components from this column.
+    ///
+    /// # Safety
+    /// - `len` must match the actual length of the column
+    /// -   The caller must not use the elements this column's data until [`initializing`](Self::initialize) it again (set `len` to 0).
+    #[inline]
+    pub(crate) unsafe fn clear(&mut self, len: usize) {
+        self.ticks.clear_elements(len);
+    }
+
+    /// Because this method needs parameters, it can't be the implementation of the `Drop` trait.
+    /// The owner of this [`Column`] must call this method with the correct information.
+    ///
+    /// # Safety
+    /// - `len` is indeed the length of the column
+    /// - `cap` is indeed the capacity of the column
+    /// - the data stored in `self` will never be used again
+    #[inline]
+    pub(crate) unsafe fn drop(&mut self, cap: usize, len: usize) {
+        self.ticks.drop(cap, len);
+    }
+
+    /// Get a slice to the [`ticks`](Tick) in this collection.
+    ///
+    /// # Safety
+    /// - `len` must match the actual length of this column (number of elements stored)
+    #[inline]
+    pub unsafe fn get_slice(&self, len: usize) -> &[UnsafeCell<Tick>] {
+        self.ticks.as_slice(len)
+    }
+
+    /// Fetches the tick at the given `row`.
+    /// This function does not do any bounds checking.
+    ///
+    /// # Safety
+    /// `row` must be within the range `[0, self.len())`.
+    #[inline]
+    pub unsafe fn get_unchecked(&self, row: TableRow) -> &UnsafeCell<Tick> {
+        self.ticks.get_unchecked(row.index())
+    }
+
+    //TODO: mutable access docs
+    /// Fetches the tick at the given `row`.
+    /// This function does not do any bounds checking.
+    ///
+    /// # Safety
+    /// `row` must be within the range `[0, self.len())`.
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, row: TableRow) -> &mut Tick {
+        self.ticks.get_unchecked_mut(row.index()).get_mut()
     }
 }
