@@ -6,8 +6,8 @@ use crate::{
     query::FilteredAccessSet,
     schedule::{InternedSystemSet, SystemSet},
     system::{
-        check_system_change_tick, ReadOnlySystemParam, System, SystemIn, SystemInput, SystemParam,
-        SystemParamItem,
+        check_system_change_tick, IterSystem, ReadOnlySystemParam, ReborrowSystemParam, System,
+        SystemIn, SystemInput, SystemParam, SystemParamItem,
     },
     world::{unsafe_world_cell::UnsafeWorldCell, DeferredWorld, World, WorldId},
 };
@@ -15,6 +15,7 @@ use crate::{
 use alloc::{borrow::Cow, vec, vec::Vec};
 use bevy_utils::prelude::DebugName;
 use core::marker::PhantomData;
+use tracing::span::Entered;
 use variadics_please::all_tuples;
 
 #[cfg(feature = "trace")]
@@ -755,6 +756,78 @@ where
     F: SystemParamFunction<Marker, Out: IntoResult<Out>>,
     F::Param: ReadOnlySystemParam,
 {
+}
+
+impl<Marker, Out, F> IterSystem for FunctionSystem<Marker, Out, F>
+where
+    Marker: 'static,
+    Out: 'static,
+    F: SystemParamFunction<Marker, Out: IntoResult<Out>, Param: ReborrowSystemParam>,
+{
+    type Iter<'a, I> = FunctionSystemIter<'a, Marker, Out, F, I>;
+
+    unsafe fn run_iter_unsafe<'a, I: IntoIterator<Item = SystemIn<'a, Self>> + 'a>(
+        &'a mut self,
+        input: I,
+        world: UnsafeWorldCell<'a>,
+    ) -> Self::Iter<'a, I::IntoIter> {
+        todo!()
+    }
+}
+
+pub struct FunctionSystemIter<'a, Marker, Out, F, Iter>
+where
+    F: SystemParamFunction<Marker, Out: IntoResult<Out>, Param: ReborrowSystemParam>,
+    Iter: Iterator<Item = <F::In as SystemInput>::Inner<'a>> + 'a,
+{
+    _span_guard: Entered<'a>,
+    func: &'a mut F,
+    #[cfg(feature = "hotpatching")]
+    current_ptr: subsecond::HotFnPtr,
+    param: SystemParamItem<'a, 'a, F::Param>,
+    input: Iter,
+    system_meta: &'a mut SystemMeta,
+    tick: Tick,
+}
+
+impl<'a, Marker, Out, F, Iter> Iterator for FunctionSystemIter<'a, Marker, Out, F, Iter>
+where
+    F: SystemParamFunction<Marker, Out: IntoResult<Out>, Param: ReborrowSystemParam>,
+    Iter: Iterator<Item = <F::In as SystemInput>::Inner<'a>> + 'a,
+{
+    type Item = Result<Out, RunSystemError>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let input = self.input.next()?;
+        let param = F::Param::reborrow(&mut self.param);
+
+        #[cfg(feature = "hotpatching")]
+        let out = {
+            let mut hot_fn = subsecond::HotFn::current(<F as SystemParamFunction<Marker>>::run);
+            // SAFETY:
+            // - pointer used to call is from the current jump table
+            unsafe {
+                hot_fn
+                    .try_call_with_ptr(self.current_ptr, (&mut self.func, input, param))
+                    .expect("Error calling hotpatched system. Run a full rebuild")
+            }
+        };
+        #[cfg(not(feature = "hotpatching"))]
+        let out = self.func.run(input, param);
+
+        IntoResult::into_result(out)
+    }
+}
+
+impl<'a, Marker, Out, F, Iter> Drop for FunctionSystemIter<'a, Marker, Out, F, Iter>
+where
+    F: SystemParamFunction<Marker, Out: IntoResult<Out>, Param: ReborrowSystemParam>,
+    Iter: Iterator<Item = <F::In as SystemInput>::Inner<'a>> + 'a,
+{
+    fn drop(&mut self) {
+        self.system_meta.last_run = self.tick;
+    }
 }
 
 /// A trait implemented for all functions that can be used as [`System`]s.

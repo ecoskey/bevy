@@ -4,7 +4,10 @@
 )]
 use bevy_utils::prelude::DebugName;
 use bitflags::bitflags;
-use core::fmt::{Debug, Display};
+use core::{
+    fmt::{Debug, Display},
+    iter,
+};
 use log::warn;
 
 use crate::{
@@ -12,7 +15,7 @@ use crate::{
     error::BevyError,
     query::FilteredAccessSet,
     schedule::InternedSystemSet,
-    system::{input::SystemInput, SystemIn},
+    system::{input::SystemInput, IntoResult, SystemIn},
     world::{unsafe_world_cell::UnsafeWorldCell, DeferredWorld, World},
 };
 
@@ -241,6 +244,54 @@ pub unsafe trait ReadOnlySystem: System {
         // SAFETY:
         // - We have read-only access to the entire world.
         unsafe { self.run_unsafe(input, world) }
+    }
+}
+
+pub trait IterSystem: System + Sized {
+    type Iter<'a, I>: Iterator<Item = Result<Self::Out, RunSystemError>>
+    where
+        I: Iterator<Item = SystemIn<'a, Self>> + 'a;
+
+    unsafe fn run_iter_unsafe<'a, I: IntoIterator<Item = SystemIn<'a, Self>> + 'a>(
+        &'a mut self,
+        input: I,
+        world: UnsafeWorldCell<'a>,
+    ) -> Self::Iter<'a, I::IntoIter>;
+
+    fn run_iter_without_applying_deferred<'a, I: IntoIterator<Item = SystemIn<'a, Self>> + 'a>(
+        &'a mut self,
+        input: I,
+        world: &'a mut World,
+    ) -> ValidateIter<'a, Self> {
+        let world_cell = world.as_unsafe_world_cell();
+        // SAFETY:
+        // - We have exclusive access to the entire world.
+        let valid = unsafe { self.validate_param_unsafe(world_cell) };
+        match valid {
+            // SAFETY:
+            // - We have exclusive access to the entire world.
+            Ok(()) => ValidateIter::Valid(unsafe { self.run_unsafe(input, world_cell) }),
+            Err(err) => ValidateIter::Invalid(Some(err)),
+        }
+    }
+}
+
+pub enum ValidateIter<'a, S: IterSystem, I: Iterator<Item = SystemIn<'a, S>> + 'a> {
+    Invalid(Option<SystemParamValidationError>),
+    Valid(S::Iter<'a, I>),
+}
+
+impl<'a, S: IterSystem, I: Iterator<Item = SystemIn<'a, S>> + 'a> Iterator
+    for ValidateIter<'a, S, I>
+{
+    type Item = Result<S::Out, RunSystemError>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ValidateIter::Invalid(once) => once.take().map(|err| Err(err.into())),
+            ValidateIter::Valid(iter) => iter.next(),
+        }
     }
 }
 
