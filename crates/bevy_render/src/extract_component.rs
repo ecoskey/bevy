@@ -11,9 +11,16 @@ use bevy_ecs::{
     bundle::NoBundleEffect,
     component::Component,
     prelude::*,
-    query::{QueryFilter, QueryItem, ReadOnlyQueryData},
+    query::{QueryData, QueryFilter, QueryItem, QueryIter, ReadOnlyQueryData},
+    system::{
+        compose, ParamBuilder, RunSystemError, ScopeSystem, SystemRunner, SystemRunnerBuilder,
+        SystemScope,
+    },
 };
+use bevy_platform::sync::{Arc, Mutex};
 use core::{marker::PhantomData, ops::Deref};
+use std::ops::DerefMut;
+use tracing::debug;
 
 pub use bevy_render_macros::ExtractComponent;
 
@@ -155,6 +162,118 @@ fn prepare_uniform_components<C>(
         })
         .collect::<Vec<_>>();
     commands.try_insert_batch(entities);
+}
+
+pub struct QueryIn<'i, D: QueryData, F: QueryFilter> {
+    data: QueryItem<'i, 'i, D>,
+    _filter: PhantomData<fn(F)>,
+}
+
+impl<D: QueryData, F: QueryFilter> SystemInput for QueryIn<'_, D, F> {
+    type Param<'i> = QueryIn<'i, D, F>;
+
+    type Inner<'i> = QueryItem<'i, 'i, D>;
+
+    fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> {
+        QueryIn {
+            data: this,
+            _filter: PhantomData,
+        }
+    }
+}
+
+impl<'i, D: QueryData, F: QueryFilter> Deref for QueryIn<'i, D, F> {
+    type Target = QueryItem<'i, 'i, D>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<'i, D: QueryData, F: QueryFilter> DerefMut for QueryIn<'i, D, F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+pub struct ExtractPlugin<D, F, B, Sys>
+where
+    Sys: ScopeSystem,
+{
+    system: Arc<Mutex<Option<Sys>>>,
+    _data: PhantomData<fn(D, F) -> B>,
+}
+
+impl<D, F, B, Sys> ExtractPlugin<D, F, B, Sys>
+where
+    D: ReadOnlyQueryData,
+    F: QueryFilter,
+    B: Bundle<Effect: NoBundleEffect>,
+    Sys: ScopeSystem<In = QueryIn<'static, D, F>, Out = Option<B>>,
+{
+    pub fn new<Marker>(
+        system: impl IntoSystem<QueryIn<'static, D, F>, Option<B>, Marker, System = Sys>,
+    ) -> Self {
+        Self {
+            system: Arc::new(Mutex::new(Some(IntoSystem::into_system(system)))),
+            _data: PhantomData,
+        }
+    }
+}
+
+impl<D, F, B, Sys> Plugin for ExtractPlugin<D, F, B, Sys>
+where
+    D: ReadOnlyQueryData + 'static,
+    F: QueryFilter + 'static,
+    B: Bundle<Effect: NoBundleEffect>,
+    Sys: ScopeSystem<In = QueryIn<'static, D, F>, Out = Option<B>>,
+{
+    fn build(&self, app: &mut App) {
+        let system = self.system.lock().unwrap().take().unwrap();
+
+        app.add_systems(
+            ExtractSchedule,
+            (
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder,
+                ParamBuilder::system(system),
+            )
+                .build_system(extract_system::<D, F, B, Sys>),
+        );
+    }
+}
+
+fn extract_system<D, F, B, Sys>(
+    mut commands: Commands,
+    mut previous_len: Local<usize>,
+    query: Extract<Query<(RenderEntity, D), F>>,
+    mut system: SystemRunner<QueryIn<'static, D, F>, Option<B>, Sys>,
+) -> Result<(), RunSystemError>
+where
+    D: ReadOnlyQueryData,
+    F: QueryFilter,
+    B: Bundle<Effect: NoBundleEffect>,
+    Sys: ScopeSystem<In = QueryIn<'static, D, F>, Out = Option<B>>,
+{
+    let mut values = Vec::with_capacity(*previous_len);
+    let mut scope = system.scope()?;
+    for (entity, data) in query.into_iter() {
+        let bundle = scope.run_with(data)?;
+        if let Some(bundle) = bundle {
+            values.push((entity, bundle));
+        } else {
+            commands.entity(entity).remove::<B>();
+        }
+    }
+
+    *previous_len = values.len();
+    commands.try_insert_batch(values);
+    Ok(())
+}
+
+pub fn extract_cloned<C: Component + Clone, F: QueryFilter>(input: QueryIn<&C, F>) -> Option<C> {
+    Some((*input).clone())
 }
 
 /// This plugin extracts the components into the render world for synced entities.
