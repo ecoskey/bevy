@@ -30,6 +30,7 @@ use bevy::{
         RenderApp, RenderStartup,
     },
 };
+use bevy_render::extract_component::{extract_cloned, ExtractPlugin};
 
 /// This example uses a shader source file from the assets subdirectory
 const SHADER_ASSET_PATH: &str = "shaders/post_processing.wgsl";
@@ -54,7 +55,7 @@ impl Plugin for PostProcessPlugin {
             // This plugin will take care of extracting it automatically.
             // It's important to derive [`ExtractComponent`] on [`PostProcessingSettings`]
             // for this plugin to work correctly.
-            ExtractComponentPlugin::<PostProcessSettings>::default(),
+            ExtractPlugin::new(extract_cloned::<PostProcessSettings, ()>),
             // The settings will also be the data used in the shader.
             // This plugin will prepare the component for the GPU by creating a uniform buffer
             // and writing the data to that buffer every frame.
@@ -284,7 +285,7 @@ fn init_post_process_pipeline(
 }
 
 // This is the component that will get passed to the shader
-#[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
+#[derive(Component, Default, Clone, Copy, ShaderType)]
 struct PostProcessSettings {
     intensity: f32,
     // WebGL2 structs must be 16 byte aligned.
