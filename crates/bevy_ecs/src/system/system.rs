@@ -244,6 +244,23 @@ pub unsafe trait ReadOnlySystem: System {
     }
 }
 
+pub trait ScopeSystem: System + Sized {
+    type Scope<'a>: SystemScope<Self>;
+
+    unsafe fn scope_unsafe<'a>(&'a mut self, world: UnsafeWorldCell<'a>) -> Self::Scope<'a>;
+}
+
+pub trait SystemScope<Sys: System> {
+    fn run_with(&mut self, input: SystemIn<'_, Sys>) -> Result<Sys::Out, RunSystemError>;
+
+    fn run(&mut self) -> Result<Sys::Out, RunSystemError>
+    where
+        Sys: System<In = ()>,
+    {
+        self.run_with(())
+    }
+}
+
 /// A convenience type alias for a boxed [`System`] trait object.
 pub type BoxedSystem<In = (), Out = ()> = Box<dyn System<In = In, Out = Out>>;
 
