@@ -6,8 +6,8 @@ use crate::{
     query::FilteredAccessSet,
     schedule::{InternedSystemSet, SystemSet},
     system::{
-        check_system_change_tick, FromInput, ReadOnlySystemParam, System, SystemIn, SystemInput,
-        SystemParam, SystemParamItem,
+        check_system_change_tick, FromInput, ReadOnlySystemParam, ReborrowSystemParam, ScopeSystem,
+        System, SystemIn, SystemInput, SystemParam, SystemParamItem, SystemScope,
     },
     world::{unsafe_world_cell::UnsafeWorldCell, DeferredWorld, World, WorldId},
 };
@@ -15,6 +15,8 @@ use crate::{
 use alloc::{borrow::Cow, vec, vec::Vec};
 use bevy_utils::prelude::DebugName;
 use core::marker::PhantomData;
+#[cfg(feature = "trace")]
+use tracing::span::Entered;
 use variadics_please::all_tuples;
 
 #[cfg(feature = "trace")]
@@ -676,7 +678,7 @@ where
         // - The above assert ensures the world matches.
         // - All world accesses used by `F::Param` have been registered, so the caller
         //   will ensure that there are no data access conflicts.
-        let params =
+        let param =
             unsafe { F::Param::get_param(&mut state.param, &self.system_meta, world, change_tick) };
 
         #[cfg(feature = "hotpatching")]
@@ -686,12 +688,12 @@ where
             // - pointer used to call is from the current jump table
             unsafe {
                 hot_fn
-                    .try_call_with_ptr(self.current_ptr, (&mut self.func, input, params))
+                    .try_call_with_ptr(self.current_ptr, (&mut self.func, input, param))
                     .expect("Error calling hotpatched system. Run a full rebuild")
             }
         };
         #[cfg(not(feature = "hotpatching"))]
-        let out = self.func.run(input, params);
+        let out = self.func.run(input, param);
 
         self.system_meta.last_run = change_tick;
         IntoResult::into_result(out)
@@ -793,6 +795,110 @@ where
         Param: ReadOnlySystemParam,
     >,
 {
+}
+
+/// The `ScopeSystem` scope type for `FunctionSystem`
+#[doc(hidden)]
+pub struct FunctionSystemScope<'a, Marker, In, Out, F>
+where
+    F: SystemParamFunction<Marker>,
+{
+    func: &'a mut F,
+    #[cfg(feature = "hotpatching")]
+    current_ptr: subsecond::HotFnPtr,
+    param: SystemParamItem<'a, 'a, F::Param>,
+    this_run: Tick,
+    last_run: &'a mut Tick,
+    #[cfg(feature = "trace")]
+    _span_guard: Entered<'a>,
+    _data: PhantomData<fn(In) -> (Marker, Out)>,
+}
+
+impl<'a, Marker, In, Out, F> SystemScope<FunctionSystem<Marker, In, Out, F>>
+    for FunctionSystemScope<'a, Marker, In, Out, F>
+where
+    Marker: 'static,
+    In: SystemInput + 'static,
+    Out: 'static,
+    F: SystemParamFunction<
+        Marker,
+        In: FromInput<In>,
+        Out: IntoResult<Out>,
+        Param: ReborrowSystemParam,
+    >,
+{
+    fn run_with(&mut self, input: In::Inner<'_>) -> Result<Out, RunSystemError> {
+        let input = F::In::from_inner(input);
+        let param = F::Param::reborrow(&mut self.param);
+
+        #[cfg(feature = "hotpatching")]
+        let out = {
+            let mut hot_fn = subsecond::HotFn::current(<F as SystemParamFunction<Marker>>::run);
+            // SAFETY:
+            // - pointer used to call is from the current jump table
+            unsafe {
+                hot_fn
+                    .try_call_with_ptr(self.current_ptr, (&mut self.func, input, param))
+                    .expect("Error calling hotpatched system. Run a full rebuild")
+            }
+        };
+        #[cfg(not(feature = "hotpatching"))]
+        let out = self.func.run(input, param);
+
+        IntoResult::into_result(out)
+    }
+}
+
+impl<'a, Marker, In, Out, F> Drop for FunctionSystemScope<'a, Marker, In, Out, F>
+where
+    F: SystemParamFunction<Marker>,
+{
+    fn drop(&mut self) {
+        *self.last_run = self.this_run;
+    }
+}
+
+impl<Marker, In, Out, F> ScopeSystem for FunctionSystem<Marker, In, Out, F>
+where
+    Marker: 'static,
+    In: SystemInput + 'static,
+    Out: 'static,
+    F: SystemParamFunction<
+        Marker,
+        In: FromInput<In>,
+        Out: IntoResult<Out>,
+        Param: ReborrowSystemParam,
+    >,
+{
+    type Scope<'a> = FunctionSystemScope<'a, Marker, In, Out, F>;
+
+    unsafe fn scope_unsafe<'a>(&'a mut self, world: UnsafeWorldCell<'a>) -> Self::Scope<'a> {
+        #[cfg(feature = "trace")]
+        let _span_guard = self.system_meta.system_span.enter();
+
+        let change_tick = world.increment_change_tick();
+
+        let state = self.state.as_mut().expect(Self::ERROR_UNINITIALIZED);
+        assert_eq!(state.world_id, world.id(), "Encountered a mismatched World. A System cannot be used with Worlds other than the one it was initialized with.");
+        // SAFETY:
+        // - The above assert ensures the world matches.
+        // - All world accesses used by `F::Param` have been registered, so the caller
+        //   will ensure that there are no data access conflicts.
+        let param =
+            unsafe { F::Param::get_param(&mut state.param, &self.system_meta, world, change_tick) };
+
+        FunctionSystemScope {
+            func: &mut self.func,
+            #[cfg(feature = "hotpatching")]
+            current_ptr: self.current_ptr,
+            this_run: change_tick,
+            last_run: &mut self.system_meta.last_run,
+            param,
+            #[cfg(feature = "trace")]
+            _span_guard,
+            _data: PhantomData,
+        }
+    }
 }
 
 /// A trait implemented for all functions that can be used as [`System`]s.
