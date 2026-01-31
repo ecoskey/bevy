@@ -263,7 +263,7 @@ pub fn derive_query_data_impl(input: TokenStream) -> TokenStream {
                         _table_row: #path::storage::TableRow,
                     ) -> Self::Item<'__w, '__s> {
                         Self::Item {
-                            #(#field_members: <#read_only_field_types>::fetch(&_state.#field_aliases, &mut _fetch.#field_aliases, _entity, _table_row),)*
+                            #(#field_members: <#read_only_field_types>::fetch(&_state.#field_aliases, &mut _fetch.#field_aliases.fetch, _entity, _table_row),)*
                         }
                     }
 
@@ -333,7 +333,7 @@ pub fn derive_query_data_impl(input: TokenStream) -> TokenStream {
                     _table_row: #path::storage::TableRow,
                 ) -> Self::Item<'__w, '__s> {
                     Self::Item {
-                        #(#field_members: <#field_types>::fetch(&_state.#field_aliases, &mut _fetch.#field_aliases, _entity, _table_row),)*
+                        #(#field_members: <#field_types>::fetch(&_state.#field_aliases, &mut _fetch.#field_aliases.fetch, _entity, _table_row),)*
                     }
                 }
 
