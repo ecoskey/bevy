@@ -260,9 +260,9 @@ pub unsafe trait WorldQuery {
 /// Extension trait for `Range`, adding convenience methods for use with [`WorldQuery::find_table_chunk`]
 /// and [`WorldQuery::find_archetype_chunk`].
 pub trait RangeExt {
-    /// Returns the union of `self` and `other` if they overlap, otherwise returns
+    /// sets `self` the union of `self` and `other` if they overlap, otherwise returns
     /// whichever is first.
-    fn union_or_first(self, other: Self) -> Self;
+    fn extend_or_first(&mut self, other: Self);
     /// Returns the next contiguous segment for which `func` returns true for all
     /// indices in the segment.
     fn find_chunk<F: FnMut(NonMaxU32) -> bool>(self, func: F) -> Self;
@@ -270,16 +270,14 @@ pub trait RangeExt {
 
 impl RangeExt for Range<u32> {
     #[inline]
-    fn union_or_first(mut self, mut other: Self) -> Self {
+    fn extend_or_first(&mut self, mut other: Self) {
         if self.start > other.start {
-            mem::swap(&mut self, &mut other);
+            mem::swap(self, &mut other);
         }
 
         if self.end >= other.start && self.end < other.end {
             self.end = other.end;
         }
-
-        self
     }
 
     #[inline]
@@ -316,8 +314,8 @@ impl RangeExt for Range<u32> {
 pub struct ChunkFetch<'w, T: WorldQuery> {
     /// the `Fetch` type of the query term
     pub fetch: T::Fetch<'w>,
-    // the `end` value of the chunk last found in `find_table_chunk`/`find_archetype_chunk`
-    pub chunk_end: u32,
+    /// the chunk last found in `find_table_chunk`/`find_archetype_chunk`
+    cached_chunk: Range<u32>,
 }
 
 #[doc(hidden)]
@@ -333,7 +331,7 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         ChunkFetch {
             // SAFETY: The invariants are upheld by the caller.
             fetch: unsafe { T::init_fetch(world, state, last_run, this_run) },
-            chunk_end: 0,
+            cached_chunk: 0..0,
         }
     }
 
@@ -343,7 +341,7 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
     ) -> ChunkFetch<'wshort, T> {
         ChunkFetch {
             fetch: T::shrink_fetch(fetch.fetch),
-            chunk_end: fetch.chunk_end,
+            cached_chunk: fetch.cached_chunk,
         }
     }
 
@@ -359,7 +357,7 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         unsafe {
             T::set_archetype(&mut fetch.fetch, state, archetype, table);
         };
-        fetch.chunk_end = 0;
+        fetch.cached_chunk = 0..0;
     }
 
     /// SAFETY: safety invariants are the same as `WorldQuery::set_table`
@@ -373,7 +371,7 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         unsafe {
             T::set_table(&mut fetch.fetch, state, table);
         }
-        fetch.chunk_end = 0;
+        fetch.cached_chunk = 0..0;
     }
 
     // SAFETY: safety invariants are the same as `WorldQuery::find_table_chunk`
@@ -384,22 +382,15 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         table_entities: &[Entity],
         rows: Range<u32>,
     ) -> Range<u32> {
-        let mut chunk = rows.start..fetch.chunk_end;
-        // if the term chunk is empty, we've gone past what what previously
+        let chunk = &mut fetch.cached_chunk;
+        chunk.start = chunk.start.max(rows.start);
+        // if the cached chunk is empty, we've gone past what what previously
         // cached and need to refresh.
-        if chunk.is_empty() {
-            // SAFETY: chunk.start..rows.end is always a subset of `rows`
-            chunk = unsafe {
-                T::find_table_chunk(
-                    state,
-                    &mut fetch.fetch,
-                    table_entities,
-                    chunk.start..rows.end,
-                )
-            };
-            fetch.chunk_end = chunk.end;
+        if Range::is_empty(chunk) {
+            // SAFETY: invariants upheld by caller
+            *chunk = unsafe { T::find_table_chunk(state, &mut fetch.fetch, table_entities, rows) };
         }
-        chunk
+        chunk.clone()
     }
 
     // SAFETY: safety invariants are the same as `WorldQuery::find_archetype_chunk`
@@ -408,24 +399,19 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         state: &T::State,
         fetch: &mut ChunkFetch<'_, T>,
         archetype_entities: &[ArchetypeEntity],
-        rows: Range<u32>,
+        indices: Range<u32>,
     ) -> Range<u32> {
-        let mut chunk = rows.start..fetch.chunk_end;
-        // if the term chunk is empty, we've gone past what what previously
+        let chunk = &mut fetch.cached_chunk;
+        chunk.start = chunk.start.max(indices.start);
+        // if the cached chunk is empty, we've gone past what what previously
         // cached and need to refresh.
-        if chunk.is_empty() {
-            // SAFETY: chunk.start..rows.end is always a subset of `rows`
-            chunk = unsafe {
-                T::find_archetype_chunk(
-                    state,
-                    &mut fetch.fetch,
-                    archetype_entities,
-                    chunk.start..rows.end,
-                )
+        if Range::is_empty(chunk) {
+            // SAFETY: invariants upheld by caller
+            *chunk = unsafe {
+                T::find_archetype_chunk(state, &mut fetch.fetch, archetype_entities, indices)
             };
-            fetch.chunk_end = chunk.end;
         }
-        chunk
+        chunk.clone()
     }
 
     // SAFETY:
@@ -436,66 +422,106 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         state: &T::State,
         fetch: &mut ChunkFetch<'_, T>,
         table_entities: &[Entity],
-        rows: &mut Range<u32>,
-        rows_end: u32,
+        rows: Range<u32>,
+        chunk: &mut Range<u32>,
     ) -> FindChunkConjunctiveResult {
         let mut result = FindChunkConjunctiveResult::Success;
         // help the compiler out to elide this if necessary
         if !T::IS_ARCHETYPAL {
-            let chunk =
+            let term_chunk =
                 // SAFETY: invariants are upheld by caller
-                unsafe { ChunkFetch::find_table_chunk(state, fetch, table_entities, rows.start..rows_end) };
-            // if the chunk is empty even after refreshing the cache, there's
+                unsafe { ChunkFetch::find_table_chunk(state, fetch, table_entities, chunk.start..rows.end) };
+            // if the term chunk is empty even after refreshing the cache, there's
             // no more matches in this table.
-            if chunk.is_empty() {
+            if term_chunk.is_empty() {
                 result = FindChunkConjunctiveResult::Abort;
             }
-            rows.start = chunk.start;
-            rows.end = rows.end.min(chunk.end);
+            chunk.start = term_chunk.start;
+            chunk.end = chunk.end.min(term_chunk.end);
             // if the chunk is empty, and we haven't aborted already, we should keep trying in this table
-            if Range::is_empty(rows) && result != FindChunkConjunctiveResult::Abort {
+            if Range::is_empty(chunk) && result != FindChunkConjunctiveResult::Abort {
                 // the current chunk can't continue matching, so we
                 // have to advance its end to the next feasible chunk
-                rows.end = chunk.end;
+                chunk.end = term_chunk.end;
                 result = FindChunkConjunctiveResult::Retry;
             }
         }
         result
     }
 
-    // SAFETY: safety invariants are the same as `WorldQuery::find_archetype_chunk`.
-    // - safety invariants are the same as `WorldQuery::find_table_chunk`
-    // - `indices_end` must be within range of the current table
+    // SAFETY:
+    // - safety invariants include those of `WorldQuery::find_archetype_chunk`.
+    // - `indices_end` must be within range of the current archetype
     #[inline(always)]
     pub unsafe fn find_archetype_chunk_conjunctive(
         state: &T::State,
         fetch: &mut ChunkFetch<'_, T>,
         archetype_entities: &[ArchetypeEntity],
-        indices: &mut Range<u32>,
-        indices_end: u32,
+        indices: Range<u32>,
+        chunk: &mut Range<u32>,
     ) -> FindChunkConjunctiveResult {
         let mut result = FindChunkConjunctiveResult::Success;
         // help the compiler out to elide this if necessary
         if !T::IS_ARCHETYPAL {
-            let chunk =
+            let term_chunk =
                 // SAFETY: invariants are upheld by caller
-                unsafe { ChunkFetch::find_archetype_chunk(state, fetch, archetype_entities, indices.start..indices_end) };
+                unsafe { ChunkFetch::find_archetype_chunk(state, fetch, archetype_entities, chunk.start..indices.end) };
             // if the term chunk is empty even after refreshing the cache, there's
             // no more matches in this table.
-            if chunk.is_empty() {
+            if term_chunk.is_empty() {
                 result = FindChunkConjunctiveResult::Abort;
             }
-            indices.start = chunk.start;
-            indices.end = indices.end.min(chunk.end);
+            chunk.start = term_chunk.start;
+            chunk.end = chunk.end.min(term_chunk.end);
             // if the chunk is empty, and we haven't aborted already, we should keep trying in this archetype
-            if Range::is_empty(indices) && result != FindChunkConjunctiveResult::Abort {
+            if Range::is_empty(chunk) && result != FindChunkConjunctiveResult::Abort {
                 // the current chunk can't continue matching, so we
                 // have to advance its end to the next feasible chunk
-                indices.end = chunk.end;
+                chunk.end = term_chunk.end;
                 result = FindChunkConjunctiveResult::Retry;
             }
         }
         result
+    }
+
+    // SAFETY:
+    // - safety invariants include those of `WorldQuery::find_table_chunk`
+    // - `rows_end` must be within range of the current table
+    #[inline(always)]
+    pub unsafe fn find_table_chunk_disjunctive(
+        state: &T::State,
+        fetch: &mut ChunkFetch<'_, T>,
+        table_entities: &[Entity],
+        rows: Range<u32>,
+        chunk: &mut Range<u32>,
+    ) {
+        // help the compiler out to elide this if necessary
+        if !T::IS_ARCHETYPAL {
+            chunk.extend_or_first(
+                // SAFETY: invariants are upheld by caller
+                unsafe { ChunkFetch::find_table_chunk(state, fetch, table_entities, rows) },
+            );
+        }
+    }
+
+    // SAFETY:
+    // - safety invariants include those of `WorldQuery::find_archetype_chunk`
+    // - `rows_end` must be within range of the current archetype
+    #[inline(always)]
+    pub unsafe fn find_archetype_chunk_disjunctive(
+        state: &T::State,
+        fetch: &mut ChunkFetch<'_, T>,
+        table_entities: &[ArchetypeEntity],
+        indices: Range<u32>,
+        chunk: &mut Range<u32>,
+    ) {
+        // help the compiler out to elide this if necessary
+        if !T::IS_ARCHETYPAL {
+            chunk.extend_or_first(
+                // SAFETY: invariants are upheld by caller
+                unsafe { ChunkFetch::find_archetype_chunk(state, fetch, table_entities, indices) },
+            );
+        }
     }
 }
 
@@ -513,7 +539,7 @@ impl<'w, T: WorldQuery> Clone for ChunkFetch<'w, T> {
     fn clone(&self) -> Self {
         Self {
             fetch: self.fetch.clone(),
-            chunk_end: self.chunk_end,
+            cached_chunk: self.cached_chunk.clone(),
         }
     }
 }
@@ -631,7 +657,7 @@ macro_rules! impl_tuple_world_query {
                             // - invariants except with respect to rows are upheld by caller.
                             // - `chunk.start..rows.end` is always a subset of `rows`
                             let result = unsafe {
-                                ChunkFetch::find_table_chunk_conjunctive($state, $name, table_entities, &mut chunk, rows.end)
+                                ChunkFetch::find_table_chunk_conjunctive($state, $name, table_entities, rows.clone(), &mut chunk)
                             };
                             match result {
                                 FindChunkConjunctiveResult::Success => {},
@@ -664,7 +690,7 @@ macro_rules! impl_tuple_world_query {
                             // - invariants except with respect to rows are upheld by caller.
                             // - `chunk.start..indices.end` is always a subset of `indices`
                             let result = unsafe {
-                                ChunkFetch::find_archetype_chunk_conjunctive($state, $name, archetype_entities, &mut chunk, indices.end)
+                                ChunkFetch::find_archetype_chunk_conjunctive($state, $name, archetype_entities, indices.clone(), &mut chunk)
                             };
                             match result {
                                 FindChunkConjunctiveResult::Success => {},

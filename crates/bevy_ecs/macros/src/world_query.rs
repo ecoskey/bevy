@@ -190,7 +190,7 @@ pub(crate) fn world_query_impl(
                             // - invariants except with respect to rows are upheld by caller.
                             // - `chunk.start..rows.end` is always a subset of `rows`
                             let result = unsafe {
-                                #path::query::ChunkFetch::find_table_chunk_conjunctive(&state.#field_aliases, &mut fetch.#field_aliases, table_entities, &mut chunk, rows.end)
+                                #path::query::ChunkFetch::find_table_chunk_conjunctive(&state.#field_aliases, &mut fetch.#field_aliases, table_entities, rows.clone(), &mut chunk)
                             };
                             match result {
                                 #path::query::FindChunkConjunctiveResult::Success => {},
@@ -221,7 +221,7 @@ pub(crate) fn world_query_impl(
                             // - invariants except with respect to rows are upheld by caller.
                             // - `chunk.start..indices.end` is always a subset of `indices`
                             let result = unsafe {
-                                #path::query::ChunkFetch::find_archetype_chunk_conjunctive(&state.#field_aliases, &mut fetch.#field_aliases, archetype_entities, &mut chunk, indices.end)
+                                #path::query::ChunkFetch::find_archetype_chunk_conjunctive(&state.#field_aliases, &mut fetch.#field_aliases, archetype_entities, indices.clone(), &mut chunk)
                             };
                             match result {
                                 #path::query::FindChunkConjunctiveResult::Success => {},

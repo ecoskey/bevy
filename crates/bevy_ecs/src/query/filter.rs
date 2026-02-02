@@ -3,7 +3,7 @@ use crate::{
     change_detection::Tick,
     component::{Component, ComponentId, Components, StorageType},
     entity::{Entities, Entity},
-    query::{DebugCheckedUnwrap, FilteredAccess, RangeExt, StorageSwitch, WorldQuery},
+    query::{ChunkFetch, DebugCheckedUnwrap, FilteredAccess, StorageSwitch, WorldQuery},
     storage::{ComponentSparseSet, Table, TableRow},
     world::{unsafe_world_cell::UnsafeWorldCell, World},
 };
@@ -349,7 +349,7 @@ macro_rules! impl_or_query_filter {
         /// `update_component_access` replace the filters with a disjunction where every element is a conjunction of the previous filters and the filters of one of the subqueries.
         /// This is sound because `matches_component_set` returns a disjunction of the results of the subqueries' implementations.
         unsafe impl<$($filter: QueryFilter),*> WorldQuery for Or<($($filter,)*)> {
-            type Fetch<'w> = OrFetch<($(OrFetch<$filter::Fetch<'w>>,)*)>;
+            type Fetch<'w> = OrFetch<($(OrFetch<ChunkFetch<'w, $filter>>,)*)>;
             type State = ($($filter::State,)*);
 
             fn shrink_fetch<'wlong: 'wshort, 'wshort>(fetch: Self::Fetch<'wlong>) -> Self::Fetch<'wshort> {
@@ -358,7 +358,7 @@ macro_rules! impl_or_query_filter {
                     fetch:
                         ($(
                             OrFetch {
-                                fetch: $filter::shrink_fetch($filter.fetch),
+                                fetch: ChunkFetch::shrink_fetch($filter.fetch),
                                 matches: $filter.matches
                             },
                         )*),
@@ -376,7 +376,7 @@ macro_rules! impl_or_query_filter {
                     fetch:
                         ($(OrFetch {
                             // SAFETY: The invariants are upheld by the caller.
-                            fetch: unsafe { $filter::init_fetch(world, $filter, last_run, this_run) },
+                            fetch: ChunkFetch::init_fetch(world, $filter, last_run, this_run),
                             matches: false,
                         },)*),
                     matches: false
@@ -398,7 +398,7 @@ macro_rules! impl_or_query_filter {
                     fetch.matches = fetch.matches || $filter.matches;
                     if $filter.matches {
                         // SAFETY: The invariants are upheld by the caller.
-                        unsafe { $filter::set_table(&mut $filter.fetch, $state, table); }
+                        unsafe { ChunkFetch::set_table(&mut $filter.fetch, $state, table) };
                     }
                 )*
             }
@@ -423,7 +423,7 @@ macro_rules! impl_or_query_filter {
                     fetch.matches = fetch.matches || $filter.matches;
                     if $filter.matches {
                         // SAFETY: The invariants are upheld by the caller.
-                       unsafe { $filter::set_archetype(&mut $filter.fetch, $state, archetype, table); }
+                       unsafe { ChunkFetch::set_archetype(&mut $filter.fetch, $state, archetype, table) };
                     }
                 )*
             }
@@ -479,14 +479,14 @@ macro_rules! impl_or_query_filter {
                 } else {
                     let ($($filter,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
-                    let mut new_rows = rows.end..rows.end;
+                    let mut chunk = rows.end..rows.end;
                     $(
                         if $filter.matches {
                             // SAFETY: invariants are upheld by the caller.
-                            new_rows = new_rows.union_or_first(unsafe { $filter::find_table_chunk($state, &mut $filter.fetch, table_entities, rows.clone()) });
+                            unsafe { ChunkFetch::find_table_chunk_disjunctive($state, &mut $filter.fetch, table_entities, rows.clone(), &mut chunk) };
                         }
                     )*
-                    new_rows
+                    chunk
                 }
             }
 
@@ -506,14 +506,14 @@ macro_rules! impl_or_query_filter {
                 } else {
                     let ($($filter,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
-                    let mut new_indices = indices.end..indices.end;
+                    let mut chunk = indices.end..indices.end;
                     $(
                         if $filter.matches {
                             // SAFETY: invariants are upheld by the caller.
-                            new_indices = new_indices.union_or_first(unsafe { $filter::find_archetype_chunk($state, &mut $filter.fetch, archetype_entities, indices.clone()) });
+                            unsafe { ChunkFetch::find_archetype_chunk_disjunctive($state, &mut $filter.fetch, archetype_entities, indices.clone(), &mut chunk) };
                         }
                     )*
-                    new_indices
+                    chunk
                 }
             }
 
@@ -534,7 +534,7 @@ macro_rules! impl_or_query_filter {
                     let ($($filter,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
                     // SAFETY: invariants are upheld by the caller.
-                    false $(|| ($filter.matches && unsafe { $filter::matches(&$state, &mut $filter.fetch, entity, table_row) }))*
+                    false $(|| ($filter.matches && unsafe { $filter::matches(&$state, &mut $filter.fetch.fetch, entity, table_row) }))*
                 }
             }
         }

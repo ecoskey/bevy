@@ -6,7 +6,7 @@ use crate::{
     entity::{Entities, Entity, EntityLocation},
     query::{
         access_iter::{EcsAccessLevel, EcsAccessType},
-        Access, DebugCheckedUnwrap, FilteredAccess, RangeExt, WorldQuery,
+        Access, ChunkFetch, DebugCheckedUnwrap, FilteredAccess, WorldQuery,
     },
     storage::{ComponentSparseSet, Table, TableRow},
     world::{
@@ -2938,7 +2938,7 @@ macro_rules! impl_anytuple_fetch {
         /// `update_component_access` replaces the filters with a disjunction where every element is a conjunction of the previous filters and the filters of one of the subqueries.
         /// This is sound because `matches_component_set` returns a disjunction of the results of the subqueries' implementations.
         unsafe impl<$($name: WorldQuery),*> WorldQuery for AnyOf<($($name,)*)> {
-            type Fetch<'w> = AnyOfFetch<($(AnyOfFetch<$name::Fetch<'w>>,)*)>;
+            type Fetch<'w> = AnyOfFetch<($(AnyOfFetch<ChunkFetch<'w, $name>>,)*)>;
             type State = ($($name::State,)*);
 
             fn shrink_fetch<'wlong: 'wshort, 'wshort>(fetch: Self::Fetch<'wlong>) -> Self::Fetch<'wshort> {
@@ -2946,7 +2946,7 @@ macro_rules! impl_anytuple_fetch {
                 AnyOfFetch {
                     fetch:
                         ($(AnyOfFetch {
-                            fetch: $name::shrink_fetch($name.fetch),
+                            fetch: ChunkFetch::shrink_fetch($name.fetch),
                             matches: $name.matches,
                         },)*),
                     matches: fetch.matches,
@@ -2960,7 +2960,7 @@ macro_rules! impl_anytuple_fetch {
                     fetch:
                         ($(AnyOfFetch {
                             // SAFETY: The invariants are upheld by the caller.
-                            fetch: unsafe { $name::init_fetch(_world, $name, _last_run, _this_run) },
+                            fetch: unsafe { ChunkFetch::init_fetch(_world, $name, _last_run, _this_run) },
                             matches: false,
                         },)*),
                     matches: false,
@@ -2985,7 +2985,7 @@ macro_rules! impl_anytuple_fetch {
                     _fetch.matches = _fetch.matches || $name.matches;
                     if $name.matches {
                         // SAFETY: The invariants are upheld by the caller.
-                        unsafe { $name::set_archetype(&mut $name.fetch, $state, _archetype, _table); }
+                        unsafe { ChunkFetch::set_archetype(&mut $name.fetch, $state, _archetype, _table); }
                     }
                 )*
             }
@@ -2999,8 +2999,8 @@ macro_rules! impl_anytuple_fetch {
                     $name.matches = $name::matches_component_set($state, &|id| _table.has_column(id));
                     _fetch.matches = _fetch.matches || $name.matches;
                     if $name.matches {
-                        // SAFETY: The invariants are required to be upheld by the caller.
-                        unsafe { $name::set_table(&mut $name.fetch, $state, _table); }
+                        // SAFETY: The invariants are upheld by the caller.
+                        unsafe { ChunkFetch::set_table(&mut $name.fetch, $state, _table); }
                     }
                 )*
             }
@@ -3059,14 +3059,14 @@ macro_rules! impl_anytuple_fetch {
                 } else {
                     let ($($name,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
-                    let mut next_chunk = rows.end..rows.end;
+                    let mut chunk = rows.end..rows.end;
                     $(
                         if $name.matches {
                             // SAFETY: invariants are upheld by the caller.
-                            next_chunk = next_chunk.union_or_first(unsafe { $name::find_table_chunk($state, &mut $name.fetch, table_entities, rows.clone()) });
+                            unsafe { ChunkFetch::find_table_chunk_disjunctive($state, &mut $name.fetch, table_entities, rows.clone(), &mut chunk) };
                         }
                     )*
-                    next_chunk
+                    chunk
                 }
             }
 
@@ -3086,14 +3086,14 @@ macro_rules! impl_anytuple_fetch {
                 } else {
                     let ($($name,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
-                    let mut next_chunk = indices.end..indices.end;
+                    let mut chunk = indices.end..indices.end;
                     $(
                         if $name.matches {
                             // SAFETY: invariants are upheld by the caller.
-                            next_chunk = next_chunk.union_or_first(unsafe { $name::find_archetype_chunk($state, &mut $name.fetch, archetype_entities, indices.clone()) });
+                            unsafe { ChunkFetch::find_archetype_chunk_disjunctive($state, &mut $name.fetch, archetype_entities, indices.clone(), &mut chunk) };
                         }
                     )*
-                    next_chunk
+                    chunk
                 }
             }
 
@@ -3114,7 +3114,7 @@ macro_rules! impl_anytuple_fetch {
                     let ($($name,)*) = &mut fetch.fetch;
                     let ($($state,)*) = state;
                     // SAFETY: invariants are upheld by the caller.
-                    false $(|| ($name.matches && unsafe { $name::matches(&$state, &mut $name.fetch, entity, table_row) }))*
+                    false $(|| ($name.matches && unsafe { $name::matches(&$state, &mut $name.fetch.fetch, entity, table_row) }))*
                 }
             }
         }
@@ -3163,11 +3163,7 @@ macro_rules! impl_anytuple_fetch {
                     let ($($state,)*) = _state;
                     ($(
                         // SAFETY: The invariants are required to be upheld by the caller.
-                        ( $name.matches && unsafe { $name::matches(&$state, &mut $name.fetch, _entity, _table_row) }).then(||
-                            // SAFETY: the above guard verifies this subquery matches the given entity.
-                            // other invariants are upheld by the caller.
-                            unsafe { $name::fetch($state, &mut $name.fetch, _entity, _table_row) }
-                        ),
+                        $name.matches.then(|| unsafe { $name::try_fetch($state, &mut $name.fetch.fetch, _entity, _table_row) }).flatten(),
                     )*)
                 }
             }
@@ -3183,7 +3179,7 @@ macro_rules! impl_anytuple_fetch {
                 let ($($state,)*) = _state;
                 let result = ($(
                     // SAFETY: The invariants are required to be upheld by the caller.
-                    $name.matches.then(|| unsafe { $name::try_fetch($state, &mut $name.fetch, _entity, _table_row) }).flatten(),
+                    $name.matches.then(|| unsafe { $name::try_fetch($state, &mut $name.fetch.fetch, _entity, _table_row) }).flatten(),
                 )*);
                 // If this is an archetypal query, then it is guaranteed to return `Some`,
                 // and we can help the compiler remove branches by checking the const `IS_ARCHETYPAL` first.
