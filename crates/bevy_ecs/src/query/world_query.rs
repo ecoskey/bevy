@@ -568,13 +568,13 @@ macro_rules! impl_tuple_world_query {
             reason = "Zero-length tuples will generate some function bodies that don't mutate their parameters; however, this macro is meant for all applicable tuples, and as such it makes no sense to rewrite it just for that case."
         )]
         $(#[$meta])*
-        /// SAFETY:
-        /// `fetch` accesses are the conjunction of the subqueries' accesses
-        /// This is sound because `update_component_access` adds accesses according to the implementations of all the subqueries.
-        /// `update_component_access` adds all `With` and `Without` filters from the subqueries.
-        /// This is sound because `matches_component_set` always returns `false` if any the subqueries' implementations return `false`.
-        /// `lookahead_table` and `lookahead_archetype` always return a subset of `rows`/`indices`
-        /// This is sound because each `lookahead_table` and `lookahead_archetype` each
+        // SAFETY:
+        // `fetch` accesses are the conjunction of the subqueries' accesses
+        // This is sound because `update_component_access` adds accesses according to the implementations of all the subqueries.
+        // `update_component_access` adds all `With` and `Without` filters from the subqueries.
+        // This is sound because `matches_component_set` always returns `false` if any the subqueries' implementations return `false`.
+        // `lookahead_table` and `lookahead_archetype` always return a subset of `rows`/`indices`
+        // This is sound because each `lookahead_table` and `lookahead_archetype` each
         unsafe impl<$($name: WorldQuery),*> WorldQuery for ($($name,)*) {
             type Fetch<'w> = ($(ChunkFetch<'w, $name>,)*);
             type State = ($($name::State,)*);
