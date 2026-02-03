@@ -107,7 +107,7 @@ fn contiguous_query_data_impl(
                         #field_members:
                         <#field_types>::fetch_contiguous(
                             &_state.#field_aliases,
-                            &mut _fetch.#field_aliases,
+                            &mut _fetch.#field_aliases.fetch,
                             _entities,
                         ),
                     )*
