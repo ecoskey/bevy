@@ -260,8 +260,8 @@ pub unsafe trait WorldQuery {
 /// Extension trait for `Range`, adding convenience methods for use with [`WorldQuery::find_table_chunk`]
 /// and [`WorldQuery::find_archetype_chunk`].
 pub trait RangeExt {
-    /// sets `self` the union of `self` and `other` if they overlap, otherwise returns
-    /// whichever is first.
+    /// Sets `self` the union of `self` and `other` if they overlap, or
+    /// whichever is first if they do not.
     fn extend_or_first(&mut self, other: Self);
     /// Returns the next contiguous segment for which `func` returns true for all
     /// indices in the segment.
@@ -320,6 +320,11 @@ pub struct ChunkFetch<'w, T: WorldQuery> {
 
 #[doc(hidden)]
 impl<T: WorldQuery> ChunkFetch<'_, T> {
+    /// Initializes a `ChunkFetch` based on the inner fetch implementation,
+    /// with an initially empty cache.
+    ///
+    /// Corresponds to [`T::init_fetch`](WorldQuery::init_fetch).
+    ///
     /// SAFETY: safety invariants are the same as `WorldQuery::init_fetch`
     #[inline]
     pub unsafe fn init_fetch<'w, 's>(
@@ -335,6 +340,9 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         }
     }
 
+    /// Returns a `ChunkFetch` with a shorter lifetime.
+    ///
+    /// Corresponds to [`T::shrink_fetch`](WorldQuery::shrink_fetch)
     #[inline(always)]
     pub fn shrink_fetch<'wlong: 'wshort, 'wshort>(
         fetch: ChunkFetch<'wlong, T>,
@@ -345,6 +353,11 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         }
     }
 
+    /// Sets the current archetype for the given `fetch`
+    /// and resets the cache.
+    ///
+    /// Corresponds to [`T::set_archetype`](WorldQuery::set_archetype)
+    ///
     /// SAFETY: safety invariants are the same as `WorldQuery::set_archetype`
     #[inline]
     pub unsafe fn set_archetype<'w, 's>(
@@ -360,6 +373,11 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         fetch.cached_chunk = 0..0;
     }
 
+    /// Sets the current archetype for the given `fetch`
+    /// and resets the cache.
+    ///
+    /// Corresponds to [`T::set_table`](WorldQuery::set_table)
+    ///
     /// SAFETY: safety invariants are the same as `WorldQuery::set_table`
     #[inline]
     pub unsafe fn set_table<'w, 's>(
@@ -374,7 +392,12 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         fetch.cached_chunk = 0..0;
     }
 
-    // SAFETY: safety invariants are the same as `WorldQuery::find_table_chunk`
+    /// Finds the next valid chunk in the current table for the inner query
+    /// type `T`, updating the cache if needed.
+    ///
+    /// Corresponds to [`T::find_table_chunk`](WorldQuery::find_table_chunk)
+    ///
+    /// SAFETY: safety invariants are the same as `WorldQuery::find_table_chunk`
     #[inline(always)]
     pub unsafe fn find_table_chunk(
         state: &T::State,
@@ -393,7 +416,12 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         chunk.clone()
     }
 
-    // SAFETY: safety invariants are the same as `WorldQuery::find_archetype_chunk`
+    /// Finds the next valid chunk in the current archetype for the inner query
+    /// type `T`, updating the cache if needed.
+    ///
+    /// Corresponds to [`T::find_archetype_chunk`](WorldQuery::find_archetype_chunk)
+    ///
+    /// SAFETY: safety invariants are the same as `WorldQuery::find_archetype_chunk`
     #[inline(always)]
     pub unsafe fn find_archetype_chunk(
         state: &T::State,
@@ -414,9 +442,16 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         chunk.clone()
     }
 
-    // SAFETY:
-    // - safety invariants are the same as `WorldQuery::find_table_chunk`
-    // - `rows_end` must be within range of the current table
+    /// A wrapper around [`Self::find_table_chunk`], meant to be used in
+    /// *conjunctive* queries, i.e. tuples and derived [`WorldQuery`] implementations.
+    ///
+    /// This handles additional complex caching and lookahead logic needed in
+    /// cases where there are multiple query terms. Tuples and derived [`WorldQueries`](WorldQuery)
+    /// use this method behind the scenes, so users should rarely, if ever, need to call this.
+    ///
+    /// SAFETY:
+    /// - safety invariants are the same as `WorldQuery::find_table_chunk`
+    /// - `chunk` must be a subset of `rows`
     #[inline(always)]
     pub unsafe fn find_table_chunk_conjunctive(
         state: &T::State,
@@ -449,9 +484,16 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         result
     }
 
-    // SAFETY:
-    // - safety invariants include those of `WorldQuery::find_archetype_chunk`.
-    // - `indices_end` must be within range of the current archetype
+    /// A wrapper around [`Self::find_archetype_chunk`], meant to be used in
+    /// *conjunctive* queries, i.e. tuples and derived [`WorldQuery`] implementations.
+    ///
+    /// This handles additional complex caching and lookahead logic needed in
+    /// cases where there are multiple query terms. Tuples and derived [`WorldQueries`](WorldQuery)
+    /// use this method behind the scenes, so users should rarely, if ever, need to call this.
+    ///
+    /// SAFETY:
+    /// - safety invariants include those of `WorldQuery::find_archetype_chunk`.
+    /// - `chunk` must be a subset of `indices`
     #[inline(always)]
     pub unsafe fn find_archetype_chunk_conjunctive(
         state: &T::State,
@@ -484,9 +526,16 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         result
     }
 
-    // SAFETY:
-    // - safety invariants include those of `WorldQuery::find_table_chunk`
-    // - `rows_end` must be within range of the current table
+    /// A wrapper around [`Self::find_table_chunk`], meant to be used in
+    /// *disjunctive* queries, i.e. [`Or`](crate::query::Or) and [`AnyOf`](crate::query::AnyOf)
+    ///
+    /// This handles additional complex caching and lookahead logic needed in
+    /// cases where there are multiple query terms. [`Or`](crate::query::Or) and [`AnyOf`](crate::query::AnyOf)
+    /// use this method behind the scenes, so users should rarely, if ever, need to call this.
+    ///
+    /// SAFETY:
+    /// - safety invariants include those of `WorldQuery::find_table_chunk`
+    /// - `chunk` must be a subset of `rows`
     #[inline(always)]
     pub unsafe fn find_table_chunk_disjunctive(
         state: &T::State,
@@ -504,9 +553,16 @@ impl<T: WorldQuery> ChunkFetch<'_, T> {
         }
     }
 
-    // SAFETY:
-    // - safety invariants include those of `WorldQuery::find_archetype_chunk`
-    // - `rows_end` must be within range of the current archetype
+    /// A wrapper around [`Self::find_archetype_chunk`], meant to be used in
+    /// *disjunctive* queries, i.e. [`Or`](crate::query::Or) and [`AnyOf`](crate::query::AnyOf)
+    ///
+    /// This handles additional complex caching and lookahead logic needed in
+    /// cases where there are multiple query terms. [`Or`](crate::query::Or) and [`AnyOf`](crate::query::AnyOf)
+    /// use this method behind the scenes, so users should rarely, if ever, need to call this.
+    ///
+    /// SAFETY:
+    /// - safety invariants include those of `WorldQuery::find_archetype_chunk`
+    /// - `chunk` must be a subset of `indices`
     #[inline(always)]
     pub unsafe fn find_archetype_chunk_disjunctive(
         state: &T::State,
