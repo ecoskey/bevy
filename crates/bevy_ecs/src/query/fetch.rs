@@ -3174,7 +3174,7 @@ macro_rules! impl_tuple_query_data {
                 let ($($state,)*) = state;
                 let ($($name,)*) = fetch;
                 // SAFETY: The invariants are upheld by the caller.
-                ($(unsafe {$name::fetch_contiguous($state, $name, entities)},)*)
+                ($(unsafe {$name::fetch_contiguous($state, &mut $name.fetch, entities)},)*)
             }
         }
     };
@@ -3518,12 +3518,12 @@ macro_rules! impl_anytuple_fetch {
                 fetch: &mut Self::Fetch<'w>,
                 entities: &'w [Entity],
             ) -> Self::Contiguous<'w, 's> {
-                let ($($name,)*) = fetch;
+                let ($($name,)*) = &mut fetch.fetch;
                 let ($($state,)*) = state;
                 // Matches the [`QueryData::fetch`] except it always returns Some
                 ($(
                     // SAFETY: The invariants are upheld by the caller
-                    $name.1.then(|| unsafe { $name::fetch_contiguous($state, &mut $name.0, entities) }),
+                    $name.matches.then(|| unsafe { $name::fetch_contiguous($state, &mut $name.fetch.fetch, entities) }),
                 )*)
             }
         }
