@@ -2900,8 +2900,8 @@ unsafe impl SystemParam for FilteredResourcesMut<'_, '_> {
 /// }
 ///
 /// let get_sum = (
-///     ParamBuilder::system(count_a),
-///     ParamBuilder::system(count_b)
+///     ParamBuilder::dyn_system(count_a),
+///     ParamBuilder::dyn_system(count_b)
 /// )
 /// .build_state(&mut world)
 /// .build_system(
