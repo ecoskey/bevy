@@ -2899,7 +2899,7 @@ unsafe impl SystemParam for FilteredResourcesMut<'_, '_> {
 ///     b.count()
 /// }
 ///
-/// let get_sum = (
+/// let get_sum: FunctionSystem<_, (), usize, _> = ( // type annotations should be unnecessary in most cases
 ///     ParamBuilder::dyn_system(count_a),
 ///     ParamBuilder::dyn_system(count_b)
 /// )
