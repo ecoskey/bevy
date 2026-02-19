@@ -2986,7 +2986,7 @@ where
             let mut accesses = conflicts.format_conflict_list(world);
             // Access list may be empty (if access to all components requested)
             if !accesses.is_empty() {
-                accesses.push(' ');
+                accesses.push('');
             }
             panic!("error[B0001]: SystemRunner({}) in system {system_name} accesses component(s) {accesses}in a way that conflicts with a previous system parameter. Consider using `Without<T>` to create disjoint system accesses or using a `ParamSet`. See: https://bevy.org/learn/errors/b0001", state.system.as_ref().map(|sys| sys.name()).unwrap_or(DebugName::borrowed("")));
         }
