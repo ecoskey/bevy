@@ -7,7 +7,7 @@ pull_requests: [21811]
 ## `SystemRunner` SystemParam
 
 We've been working on some new tools to make composing multiple ECS systems together
-even easier. Bevy 0.18 introduces the `SystemRunner` `SystemParam`, allowing running
+even easier. Bevy 0.19 introduces the `SystemRunner` `SystemParam`, enabling the ability to run
 systems inside other systems!
 
 ```rust
